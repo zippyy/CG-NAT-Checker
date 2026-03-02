@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>CGNAT Check</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 2rem; }
+    .card { max-width: 860px; padding: 1.25rem 1.5rem; border: 1px solid #ddd; border-radius: 14px; }
+    .row { margin: .35rem 0; }
+    .pill { display:inline-block; padding:.15rem .55rem; border-radius:999px; font-weight:800; }
+    .ok { color:#0a7a2f; background:#eaf7ef; }
+    .warn { color:#b45309; background:#fff4e6; }
+    .bad { color:#b91c1c; background:#fdecec; }
+    .muted { color:#555; font-size: 0.95rem; }
+    code { background:#f6f6f6; padding:0.15rem 0.35rem; border-radius:6px; }
+    button { padding:.5rem .75rem; border-radius:10px; border:1px solid #ddd; background:#fff; cursor:pointer; }
+    button:hover { background:#f8f8f8; }
+    hr { border:none; border-top:1px solid #eee; margin:1rem 0; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>CGNAT Check</h1>
+    <div id="headline" class="row">Checking…</div>
+    <div id="summary" class="row muted"></div>
+    <hr/>
+    <div class="row"><strong>Signals</strong></div>
+    <div class="row" id="sig1"></div>
+    <div class="row" id="sig2"></div>
+    <hr/>
+    <div class="row"><strong>Cloudflare (optional context)</strong></div>
+    <div class="row muted" id="cfmeta"></div>
+    <hr/>
+    <button id="copyBtn" style="display:none;">Copy detected IPs</button>
+    <div class="row muted" id="note"></div>
+  </div>
+<script>
+async function getIPData() {
+  const res = await fetch("/ip", { cache: "no-store" });
+  if (!res.ok) throw new Error("Failed to fetch IP");
+  return await res.json();
+}
+
+function classifyIPv4(ip) {
+  if (!ip) return { type: "unknown", label: "Unknown" };
+  if (ip.startsWith("100.") || ip.startsWith("100.6") || ip.startsWith("100.7"))
+    return { type: "cgnat", label: "CGNAT (100.64.0.0/10)" };
+  if (ip.startsWith("10.") || ip.startsWith("192.168.") || ip.startsWith("172."))
+    return { type: "private", label: "Private RFC1918" };
+  return { type: "public", label: "Public routable IPv4" };
+}
+
+async function run() {
+  const headline = document.getElementById("headline");
+  const summary = document.getElementById("summary");
+  const sig1 = document.getElementById("sig1");
+  const cfmeta = document.getElementById("cfmeta");
+  const copyBtn = document.getElementById("copyBtn");
+
+  try {
+    const data = await getIPData();
+    const ip = data.ip;
+    const info = classifyIPv4(ip);
+
+    sig1.innerHTML = `Cloudflare sees: <code>${ip}</code> — ${info.label}`;
+
+    if (info.type === "cgnat") {
+      headline.innerHTML = '<span class="pill warn">⚠️ Likely CGNAT detected</span>';
+      summary.textContent = "Your public IP appears to be in the CGNAT range.";
+    } else if (info.type === "public") {
+      headline.innerHTML = '<span class="pill ok">✅ Public routable address</span>';
+      summary.textContent = "Your connection appears publicly routable.";
+    } else {
+      headline.innerHTML = '<span class="pill bad">❌ Not publicly routable</span>';
+      summary.textContent = "Your IP appears private or reserved.";
+    }
+
+    if (data.cf) {
+      cfmeta.innerHTML = `ASN: ${data.cf.asn || "n/a"} · Org: ${data.cf.asOrganization || "n/a"} · Country: ${data.cf.country || "n/a"}`;
+    }
+
+    copyBtn.style.display = "inline-block";
+    copyBtn.onclick = () => navigator.clipboard.writeText(ip);
+
+  } catch (e) {
+    headline.innerHTML = '<span class="pill bad">❌ Check failed</span>';
+    summary.textContent = e.toString();
+  }
+}
+
+run();
+</script>
+</body>
+</html>
