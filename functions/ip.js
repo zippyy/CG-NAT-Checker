@@ -10,7 +10,7 @@ export async function onRequest(context) {
 
   const cf = req.cf || {};
 
-  const body = {
+  return new Response(JSON.stringify({
     ip,
     forwardedFor: xffFirst || null,
     cf: {
@@ -21,13 +21,11 @@ export async function onRequest(context) {
       city: cf.city ?? null,
       colo: cf.colo ?? null,
       timezone: cf.timezone ?? null,
-    },
-  };
-
-  return new Response(JSON.stringify(body), {
+    }
+  }), {
     headers: {
       "content-type": "application/json; charset=utf-8",
       "cache-control": "no-store",
-    },
+    }
   });
 }
