@@ -12,7 +12,6 @@ export async function onRequest(context) {
   const headers = {
     "content-type": "application/json; charset=utf-8",
     "cache-control": "no-store",
-    // allow same-origin + optional cross-origin use
     "access-control-allow-origin": "*",
     "access-control-allow-methods": "GET, OPTIONS",
     "access-control-allow-headers": "Content-Type",

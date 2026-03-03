@@ -22,6 +22,7 @@
     @media(min-width:900px){ .grid { grid-template-columns: 1fr 1fr; } }
     .box { border:1px solid #eee; border-radius:12px; padding:.75rem; }
     .box h3 { margin:.1rem 0 .4rem; font-size: 1.02rem; }
+    .small { font-size: .9rem; }
   </style>
 </head>
 <body>
@@ -51,7 +52,7 @@
         <h3>Probe target</h3>
         <div class="row">
           <label>Host&nbsp;
-            <input id="probeHost" placeholder="example.com or your IPv4" style="width: 280px;">
+            <input id="probeHost" placeholder="example.com or your IPv4" style="width: 320px;">
           </label>
         </div>
         <div class="row">
@@ -67,12 +68,13 @@
           </label>
           &nbsp;&nbsp;
           <label>Path&nbsp;
-            <input id="probePath" value="/" style="width:140px;">
+            <input id="probePath" value="/" style="width:160px;">
           </label>
         </div>
         <div class="row">
           <button id="probeBtn">Run inbound check</button>
         </div>
+        <div class="row muted small">Tip: If you're probing your own public IPv4, be sure a web service is actually listening on that port and forwarded through your router/firewall.</div>
       </div>
 
       <div class="box">
@@ -89,7 +91,7 @@
 
     <hr/>
 
-    <button id="copyBtn" style="display:none;">Copy detected IPs</button>
+    <button id="copyBtn" style="display:none;">Copy report</button>
     <div class="row muted" id="note"></div>
   </div>
 
@@ -239,6 +241,26 @@
     return keywords.some(k => o.includes(k));
   }
 
+  function probeDiagnosis(probeJson) {
+    if (!probeJson) return { kind: "warn", title: "No probe run yet", detail: "" };
+    if (probeJson.error) {
+      const msg = String(probeJson.error);
+      if (msg.includes("AbortError")) {
+        return { kind: "warn", title: "Timeout (likely blocked inbound)", detail: "Cloudflare couldn't connect within the timeout window. This often indicates upstream NAT (CGNAT/carrier NAT), firewall blocking, or no service listening." };
+      }
+      return { kind: "warn", title: "Connection failed", detail: msg };
+    }
+    if (probeJson.result) {
+      const { ok, status, statusText } = probeJson.result;
+      if (ok) return { kind: "ok", title: "Reachable from the public internet", detail: "Cloudflare successfully fetched the URL. Hosting/inbound for this HTTP(S) endpoint appears to work." };
+      if ([301,302,307,308].includes(status)) return { kind: "ok", title: "Reachable (redirect)", detail: "The service is reachable but returned a redirect. That's still a good inbound signal." };
+      if ([401,403].includes(status)) return { kind: "ok", title: "Reachable (access-controlled)", detail: "The service is reachable but requires auth or blocks the request. That's still a good inbound signal." };
+      if (status >= 500 && status <= 599) return { kind: "warn", title: "Reachable, but server error", detail: "Cloudflare reached the service, but it returned a 5xx. Inbound works; fix the service/app." };
+      return { kind: "warn", title: "Reachable, but unexpected response", detail: "Cloudflare reached the service, but it returned HTTP " + status + (statusText ? (" " + statusText) : "") + "." };
+    }
+    return { kind: "warn", title: "Unknown probe result", detail: "" };
+  }
+
   async function run() {
     const headline = document.getElementById("headline");
     const summary = document.getElementById("summary");
@@ -258,6 +280,52 @@
     const probeDetail = document.getElementById("probeDetail");
 
     let cfIP = null, cfData = null;
+    let stunV4 = null, stunV6 = null;
+    let lastProbe = null;
+
+    function renderHeadline() {
+      const v4ForCGNAT = isIPv4(cfIP) ? cfIP : (stunV4 || null);
+      const v4Info = v4ForCGNAT ? classifyIPv4(v4ForCGNAT) : { type: "unknown", label: "Unavailable" };
+      const cgnatRange = v4Info.type === "cgnat";
+      const org = cfData?.asOrganization || "";
+      const likelyCarrierNAT = looksLikeMobileCarrier(org);
+
+      if (cgnatRange) {
+        setPill(headline, "⚠️ RFC6598 CGNAT range detected (IPv4)", "warn");
+        summary.textContent = "Your observed IPv4 is in 100.64.0.0/10 (RFC6598). Inbound hosting typically won't work without an upstream public IP.";
+        return;
+      }
+
+      if (lastProbe && !lastProbe.error && lastProbe.result) {
+        const s = lastProbe.result.status;
+        const inboundReachable = lastProbe.result.ok || [301,302,307,308,401,403].includes(s);
+        if (inboundReachable) {
+          setPill(headline, "✅ Inbound HTTP(S) appears reachable", "ok");
+          summary.textContent = "Cloudflare can reach the URL you tested. Hosting/inbound for that HTTP(S) endpoint likely works.";
+          return;
+        }
+      }
+
+      if (isIPv4(v4ForCGNAT) && v4Info.type === "public" && likelyCarrierNAT) {
+        if (lastProbe && lastProbe.error) {
+          setPill(headline, "⚠️ Public IPv4, likely carrier/shared NAT (inbound failing)", "warn");
+          summary.textContent = "Your IPv4 is public but your ISP looks like a mobile carrier. Combined with the inbound probe result, shared NAT or blocked inbound is very likely.";
+        } else {
+          setPill(headline, "⚠️ Public IPv4, but likely behind carrier NAT", "warn");
+          summary.textContent = "Many mobile carriers use shared NAT even with a public IPv4. Run the inbound check below to confirm reachability.";
+        }
+        return;
+      }
+
+      if (isIPv4(v4ForCGNAT) && v4Info.type === "public") {
+        setPill(headline, "✅ Public IPv4 detected (not RFC6598 range)", "ok");
+        summary.textContent = "Your observed IPv4 is not in RFC6598 CGNAT range. Inbound hosting still depends on port forwards/firewall—use the inbound check below.";
+        return;
+      }
+
+      setPill(headline, "❌ No public IPv4 signal", "bad");
+      summary.textContent = "Your observed IPv4 looks private/reserved or unavailable. Inbound hosting will typically fail.";
+    }
 
     try {
       const res = await fetch("/ip", { cache: "no-store" });
@@ -271,10 +339,9 @@
       return;
     }
 
-    // Signals
     const stun = await getWebRTCServerReflexiveIPs();
-    const stunV4 = stun.ipv4;
-    const stunV6 = stun.ipv6;
+    stunV4 = stun.ipv4;
+    stunV6 = stun.ipv6;
 
     sigCF.innerHTML = fmtSignal("Cloudflare sees", cfIP);
     const stunParts = [];
@@ -282,37 +349,11 @@
     if (stunV6) stunParts.push(fmtSignal("WebRTC/STUN (IPv6)", stunV6));
     sigSTUN.innerHTML = stunParts.length ? stunParts.join("<br/>") : 'WebRTC/STUN: <span class="muted">unavailable</span>';
 
-    // CGNAT range result is strictly RFC6598 based
-    const cfInfo = classifyIP(cfIP);
-    const v4ForCGNAT = isIPv4(cfIP) ? cfIP : (stunV4 || null);
-    const v4Info = v4ForCGNAT ? classifyIPv4(v4ForCGNAT) : { type: "unknown", label: "Unavailable" };
-    const cgnatRange = v4Info.type === "cgnat";
-
-    // Carrier NAT heuristic (org-based) — not a proof
-    const org = cfData?.asOrganization || "";
-    const likelyCarrierNAT = looksLikeMobileCarrier(org);
-
-    // Headline logic
-    if (cgnatRange) {
-      setPill(headline, "⚠️ RFC6598 CGNAT range detected (IPv4)", "warn");
-      summary.textContent = "Your observed IPv4 is in 100.64.0.0/10 (RFC6598). Inbound hosting will usually not work without an upstream public IP.";
-    } else if (isIPv4(v4ForCGNAT) && v4Info.type === "public" && likelyCarrierNAT) {
-      setPill(headline, "⚠️ Public IPv4, but likely behind carrier NAT", "warn");
-      summary.textContent = "Many mobile carriers use shared NAT even when your external IPv4 is public. Use the inbound check below to confirm reachability.";
-    } else if (isIPv4(v4ForCGNAT) && v4Info.type === "public") {
-      setPill(headline, "✅ Public IPv4 detected (not RFC6598 range)", "ok");
-      summary.textContent = "Your observed IPv4 is not in the RFC6598 CGNAT range. Inbound hosting still depends on firewall/port forwards—use the inbound check below.";
-    } else {
-      setPill(headline, "❌ No public IPv4 signal", "bad");
-      summary.textContent = "Your observed IPv4 looks private/reserved or unavailable. Inbound hosting will typically fail.";
-    }
-
     explain.innerHTML =
       "• <strong>RFC6598 CGNAT range</strong> is strictly <code>100.64.0.0/10</code>. " +
       "• <strong>Carrier/shared NAT</strong> can still exist with a public IPv4 (common on mobile ISPs). " +
-      "That’s why the <strong>inbound hosting check</strong> matters.";
+      "• The <strong>inbound hosting check</strong> is the practical test for hosting.";
 
-    // Cloudflare context
     if (cfData) {
       const bits = [];
       if (cfData.asn) bits.push("ASN <code>" + cfData.asn + "</code>");
@@ -328,10 +369,10 @@
       cfmeta.innerHTML = '<span class="muted">No Cloudflare metadata available.</span>';
     }
 
-    // Default probe target: use the observed IPv4 (Cloudflare) if available, otherwise blank
     if (cfIP && isIPv4(cfIP)) probeHostEl.value = cfIP;
 
-    // Probe button
+    renderHeadline();
+
     probeBtn.onclick = async () => {
       const host = probeHostEl.value.trim();
       const port = probePortEl.value.trim();
@@ -341,70 +382,90 @@
       probeOut.innerHTML = '<span class="muted">Checking…</span>';
       probeDetail.textContent = "";
 
-      const qs = new URLSearchParams({
-        host,
-        scheme,
-        path,
-        ...(port ? { port } : {}),
-      });
+      const qs = new URLSearchParams({ host, scheme, path, ...(port ? { port } : {}) });
 
       try {
         const r = await fetch("/probe?" + qs.toString(), { cache: "no-store" });
         const data = await r.json();
+        lastProbe = data;
+
+        const diag = probeDiagnosis(data);
 
         if (data.error) {
-          probeOut.innerHTML = `<span class="pill bad">❌ Probe blocked</span> <span class="muted">${escapeHtml(data.error)}</span>`;
+          probeOut.innerHTML = `<span class="pill ${diag.kind}">⚠️ ${escapeHtml(diag.title)}</span>` + (data.target ? ` <span class="muted">${escapeHtml(data.target)}</span>` : "");
+          probeDetail.textContent = diag.detail;
+          renderHeadline();
           return;
         }
 
-        if (data.result && typeof data.result.status === "number") {
-          const ok = !!data.result.ok;
-          const status = data.result.status;
-          probeOut.innerHTML =
-            (ok
-              ? `<span class="pill ok">✅ Reachable</span>`
-              : `<span class="pill warn">⚠️ Not reachable</span>`) +
-            ` <span class="muted">${escapeHtml(data.target)} → HTTP ${status}</span>`;
+        const status = data.result?.status;
+        probeOut.innerHTML =
+          `<span class="pill ${diag.kind}">${diag.kind === "ok" ? "✅" : "⚠️"} ${escapeHtml(diag.title)}</span>` +
+          ` <span class="muted">${escapeHtml(data.target)}${(typeof status === "number") ? (" → HTTP " + status) : ""}</span>`;
+        probeDetail.textContent = diag.detail;
 
-          if (!ok) {
-            probeDetail.textContent =
-              "If you expected this to be reachable, check router port forward/firewall, upstream NAT (CGNAT/carrier NAT), and whether a service is listening.";
-          } else {
-            probeDetail.textContent =
-              "Cloudflare successfully reached your service from the public internet (at least for this URL).";
-          }
-          return;
-        }
-
-        probeOut.innerHTML = `<span class="pill warn">⚠️ No response</span> <span class="muted">${escapeHtml(data.target)} (${escapeHtml(data.error || "unknown")})</span>`;
-        probeDetail.textContent = "This usually indicates timeout, blocked inbound, or no service listening.";
+        renderHeadline();
       } catch (e) {
-        probeOut.innerHTML = `<span class="pill bad">❌ Probe failed</span> <span class="muted">${escapeHtml(String(e))}</span>`;
+        lastProbe = { error: String(e) };
+        const diag = probeDiagnosis(lastProbe);
+        probeOut.innerHTML = `<span class="pill ${diag.kind}">⚠️ ${escapeHtml(diag.title)}</span> <span class="muted">${escapeHtml(String(e))}</span>`;
+        probeDetail.textContent = diag.detail;
+        renderHeadline();
       }
     };
 
-    // Footer note (WebRTC availability)
     if (!stunV4 && !stunV6) {
-      note.innerHTML =
-        "Note: WebRTC/STUN is unavailable (blocked by browser/privacy settings or network policy). Results are based on Cloudflare-only.";
+      note.innerHTML = "Note: WebRTC/STUN is unavailable (blocked by browser/privacy settings or network policy). Results are based on Cloudflare-only.";
     } else {
       note.textContent = "";
     }
 
-    // Copy button
-    const lines = [];
-    if (cfIP) lines.push("Cloudflare: " + cfIP + " (" + classifyIP(cfIP).label + ")");
-    if (stunV4) lines.push("WebRTC/STUN IPv4: " + stunV4 + " (" + classifyIP(stunV4).label + ")");
-    if (stunV6) lines.push("WebRTC/STUN IPv6: " + stunV6 + " (" + classifyIP(stunV6).label + ")");
+    const reportLines = () => {
+      const ts = new Date().toISOString();
+      const v4ForCGNAT = isIPv4(cfIP) ? cfIP : (stunV4 || "");
+      const v4Info = v4ForCGNAT ? classifyIPv4(v4ForCGNAT) : { label: "Unavailable" };
+      const org = cfData?.asOrganization || "";
+      const asn = cfData?.asn || "";
+      const carrier = looksLikeMobileCarrier(org) ? "likely-mobile-carrier" : "unknown";
 
-    copyBtn.style.display = lines.length ? "inline-block" : "none";
+      const lines = [];
+      lines.push("CGNAT.xyz Report (" + ts + ")");
+      lines.push("");
+      lines.push("Signals:");
+      if (cfIP) lines.push("- Cloudflare: " + cfIP + " (" + classifyIP(cfIP).label + ")");
+      if (stunV4) lines.push("- WebRTC/STUN IPv4: " + stunV4 + " (" + classifyIP(stunV4).label + ")");
+      if (stunV6) lines.push("- WebRTC/STUN IPv6: " + stunV6 + " (" + classifyIP(stunV6).label + ")");
+      lines.push("");
+      lines.push("CGNAT range check (RFC6598): " + v4Info.label);
+      lines.push("ASN/Org: " + (asn ? ("AS" + asn) : "n/a") + " / " + (org || "n/a") + " (" + carrier + ")");
+      lines.push("");
+      if (lastProbe) {
+        lines.push("Inbound HTTP(S) probe:");
+        if (lastProbe.target) lines.push("- Target: " + lastProbe.target);
+        if (lastProbe.error) {
+          lines.push("- Result: ERROR");
+          lines.push("- Error: " + String(lastProbe.error));
+        } else if (lastProbe.result) {
+          lines.push("- Result: HTTP " + lastProbe.result.status + " (ok=" + !!lastProbe.result.ok + ")");
+          if (lastProbe.result.sample) lines.push("- Sample: " + String(lastProbe.result.sample).replace(/\s+/g," ").slice(0,200));
+        } else {
+          lines.push("- Result: (no data)");
+        }
+      } else {
+        lines.push("Inbound HTTP(S) probe: not run");
+      }
+      return lines.join("\\n");
+    };
+
+    copyBtn.style.display = "inline-block";
     copyBtn.onclick = async () => {
+      const text = reportLines();
       try {
-        await navigator.clipboard.writeText(lines.join("\n"));
+        await navigator.clipboard.writeText(text);
         copyBtn.textContent = "Copied!";
-        setTimeout(() => (copyBtn.textContent = "Copy detected IPs"), 1200);
+        setTimeout(() => (copyBtn.textContent = "Copy report"), 1200);
       } catch {
-        alert(lines.join("\n"));
+        alert(text);
       }
     };
   }
