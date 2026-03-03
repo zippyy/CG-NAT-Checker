@@ -125,7 +125,7 @@
     return m ? m[1] : null;
   }
   function isIPv6(ip) { ip = normalizeIP(ip); return typeof ip === "string" && ip.includes(":"); }
-  function isIPv4(ip) { ip = normalizeIP(ip); return typeof ip === "string" && /^\d{1,3}(\.\d{1,3}){3}$/.test(ip); }(\\.\\d{1,3}){3}$/.test(ip); }
+  function isIPv4(ip) { return typeof ip === "string" && /^\\d{1,3}(\\.\\d{1,3}){3}$/.test(ip); }
 
   function ipv4ToInt(ip) {
     const p = ip.split(".").map(Number);
