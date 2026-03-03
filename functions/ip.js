@@ -7,12 +7,10 @@ export async function onRequest(context) {
   const xffFirst = xff ? xff.split(",")[0].trim() : "";
 
   const ip = cfConnectingIp || xffFirst || "";
-
   const cf = req.cf || {};
 
   return new Response(JSON.stringify({
     ip,
-    forwardedFor: xffFirst || null,
     cf: {
       asn: cf.asn ?? null,
       asOrganization: cf.asOrganization ?? null,
