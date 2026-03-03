@@ -30,26 +30,22 @@
   <div class="card">
     <h1>CGNAT Check</h1>
 
-    <!-- Headline verdict (keep) -->
     <div id="headline" class="row">Checking…</div>
     <div id="summary" class="row muted"></div>
 
     <hr/>
 
-    <!-- Signals (keep) -->
     <div class="row"><strong>Signals</strong></div>
     <div class="row" id="sig_cf"></div>
     <div class="row" id="sig_stun"></div>
 
     <hr/>
 
-    <!-- CGNAT range vs Carrier NAT (keep) -->
     <div class="row"><strong>CGNAT range vs. Carrier NAT</strong></div>
     <div class="row muted" id="rangeExplain"></div>
 
     <hr/>
 
-    <!-- Inbound hosting check (keep layout + upgrade logic) -->
     <div class="row"><strong>Inbound hosting check (HTTP/HTTPS)</strong></div>
     <div class="row muted">This checks whether Cloudflare can reach a URL you host. It does not test arbitrary TCP/UDP ports.</div>
 
@@ -99,19 +95,16 @@
 
     <hr/>
 
-    <!-- Detected families (keep) -->
     <div class="row"><strong>Detected families</strong></div>
     <div class="row muted" id="families"></div>
 
     <hr/>
 
-    <!-- Cloudflare optional context (keep) -->
     <div class="row"><strong>Cloudflare (optional context)</strong></div>
     <div class="row muted" id="cfmeta"></div>
 
     <hr/>
 
-    <!-- Copy button + note (keep) -->
     <button id="copyBtn" style="display:none;">Copy detected IPs</button>
     <div class="row muted" id="note"></div>
   </div>
@@ -124,8 +117,19 @@
     const m = ip.match(/^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/);
     return m ? m[1] : null;
   }
+  function looksIPv4(ipRaw) {
+    const ip = normalizeIP(ipRaw);
+    if (!ip || ip.includes(":")) return false;
+    const parts = ip.split(".");
+    if (parts.length !== 4) return false;
+    for (const p of parts) {
+      if (!/^\d+$/.test(p)) return false;
+      const n = Number(p);
+      if (n < 0 || n > 255) return false;
+    }
+    return true;
+  }
   function isIPv6(ip) { ip = normalizeIP(ip); return typeof ip === "string" && ip.includes(":"); }
-  function isIPv4(ip) { return typeof ip === "string" && /^\\d{1,3}(\\.\\d{1,3}){3}$/.test(ip); }
 
   function ipv4ToInt(ip) {
     const p = ip.split(".").map(Number);
@@ -148,8 +152,9 @@
     if (inCidr4(ip, "224.0.0.0", 4)) return { type: "reserved", label: "Multicast/Reserved IPv4 (224/4)" };
     return { type: "public", label: "Public IPv4 (not RFC6598 range)" };
   }
+
   function classifyIPv6(ipRaw) {
-    const ip = (ipRaw || "").toLowerCase();
+    const ip = normalizeIP(ipRaw).toLowerCase();
     if (ip === "::1") return { type: "reserved", label: "Loopback IPv6 (::1)" };
     if (ip.startsWith("fe80:")) return { type: "reserved", label: "Link-local IPv6 (fe80::/10)" };
     if (ip.startsWith("fc") || ip.startsWith("fd")) return { type: "private", label: "ULA IPv6 (fc00::/7)" };
@@ -157,17 +162,18 @@
     if (ip.startsWith("2") || ip.startsWith("3")) return { type: "public", label: "Public routable IPv6" };
     return { type: "unknown", label: "IPv6 (unclassified/reserved)" };
   }
+
   function classifyIP(ip) {
     ip = normalizeIP(ip);
     const v4m = ipv4FromV6Mapped(ip);
     if (v4m) ip = v4m;
     if (!ip) return { type: "unknown", label: "Unavailable" };
     if (isIPv6(ip)) return classifyIPv6(ip);
-    if (isIPv4(ip)) return classifyIPv4(ip);
+    if (looksIPv4(ip)) return classifyIPv4(ip);
     return ip.includes(":") ? classifyIPv6(ip) : classifyIPv4(ip);
   }
 
-  // ---------- WebRTC/STUN (kept) ----------
+  // ---------- WebRTC/STUN ----------
   async function getWebRTCServerReflexiveIPs(timeoutMs = 3500) {
     const RTCPeerConnectionCtor = window.RTCPeerConnection || window.webkitRTCPeerConnection;
     if (!RTCPeerConnectionCtor) return { ipv4: null, ipv6: null };
@@ -186,7 +192,7 @@
     function extractIP(candidateStr) {
       const parts = candidateStr.split(" ");
       for (const token of parts) {
-        if (/^\\d{1,3}(\\.\\d{1,3}){3}$/.test(token)) return token;
+        if (/^\d{1,3}(\.\d{1,3}){3}$/.test(token)) return token;
         if (/^[0-9a-fA-F:]+$/.test(token) && token.includes(":")) return token;
       }
       return null;
@@ -204,10 +210,11 @@
         if (!event.candidate || done) return;
         const cand = event.candidate.candidate || "";
         if (!cand.includes(" typ srflx ")) return;
+
         const ip = extractIP(cand);
         if (!ip) return;
-        if (isIPv6(ip)) foundV6.add(ip);
-        else if (isIPv4(ip)) foundV4.add(ip);
+        if (ip.includes(":")) foundV6.add(ip);
+        else foundV4.add(ip);
       };
 
       try {
@@ -254,7 +261,8 @@
   function escapeHtml(s) {
     return String(s)
       .replaceAll("&", "&amp;").replaceAll("<", "&lt;")
-      .replaceAll(">", "&gt;").replaceAll('"', "&quot;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
       .replaceAll("'", "&#039;");
   }
 
@@ -292,7 +300,6 @@
     let cfIP=null, cfData=null, forwardedFor=null;
     let stunV4=null, stunV6=null;
 
-    // Fetch /ip (kept)
     try {
       const res = await fetch("/ip", { cache: "no-store" });
       if (!res.ok) throw new Error("Failed to fetch /ip (HTTP " + res.status + ")");
@@ -301,17 +308,13 @@
       forwardedFor = data.forwardedFor || null;
       cfData = data.cf || null;
 
-      // Autofill probe host immediately with what Cloudflare sees (even if IPv6)
-      if (cfIP) {
-        probeHost.value = ipv4FromV6Mapped(cfIP) || cfIP;
-      }
+      if (cfIP) probeHost.value = ipv4FromV6Mapped(cfIP) || cfIP;
     } catch (e) {
       setPill(headline, "❌ Check failed", "bad");
       summary.textContent = String(e);
       return;
     }
 
-    // STUN (kept)
     const stun = await getWebRTCServerReflexiveIPs();
     stunV4 = stun.ipv4;
     stunV6 = stun.ipv6;
@@ -322,20 +325,17 @@
     if (stunV6) stunParts.push(fmtSignal("WebRTC/STUN (IPv6)", stunV6));
     sigSTUN.innerHTML = stunParts.length ? stunParts.join("<br/>") : 'WebRTC/STUN: <span class="muted">unavailable</span>';
 
-    // Detected families (kept)
     const observed = new Set();
     if (cfIP) observed.add(isIPv6(cfIP) ? "IPv6" : "IPv4");
     if (stunV4) observed.add("IPv4");
     if (stunV6) observed.add("IPv6");
     families.textContent = observed.size ? [...observed].join(" + ") : "none";
 
-    // Range vs carrier explanation (kept)
     rangeExplain.innerHTML =
       "• <strong>RFC6598 CGNAT range</strong> is strictly <code>100.64.0.0/10</code>. " +
       "• <strong>Carrier/shared NAT</strong> can still exist with a public IPv4 (common on mobile ISPs). " +
       "That’s why the <strong>inbound hosting check</strong> matters.";
 
-    // CF optional context (kept)
     if (cfData) {
       const bits = [];
       if (cfData.asn) bits.push("ASN <code>" + cfData.asn + "</code>");
@@ -351,8 +351,9 @@
       cfmeta.innerHTML = '<span class="muted">No Cloudflare metadata available.</span>';
     }
 
-    // Headline verdict (kept style, improved wording)
-    const v4 = isIPv4(cfIP) ? cfIP : (stunV4 || null);
+    // Robust IPv4 selection for verdict.
+    const cfV4 = ipv4FromV6Mapped(cfIP) || (looksIPv4(cfIP) ? cfIP : null);
+    const v4 = cfV4 || stunV4 || null;
     const v4Info = v4 ? classifyIPv4(v4) : { type: "unknown", label: "Unavailable" };
     const likelyCarrier = looksLikeMobileCarrier(cfData?.asOrganization || "");
 
@@ -364,15 +365,15 @@
       summary.textContent = "Many mobile carriers use shared NAT even when your external IPv4 is public. Use the inbound check below to confirm reachability.";
     } else if (v4Info.type === "public") {
       setPill(headline, "✅ Public IPv4 detected (not RFC6598 range)", "ok");
-      summary.textContent = "Your observed IPv4 is not in RFC6598 CGNAT range. Inbound hosting still depends on forwarding/firewalls—use the inbound check below.";
+      summary.textContent = "Your observed IPv4 is not in the RFC6598 CGNAT range. Inbound hosting still depends on firewall/port forwards—use the inbound check below.";
     } else {
       setPill(headline, "❌ No public IPv4 signal detected", "bad");
       summary.textContent = "Signals look private/reserved or unavailable. Inbound hosting will typically fail.";
     }
 
-    // Probe defaults (kept)
-    // Prefer IPv4 for probing when available, otherwise keep Cloudflare IP (IPv6) already filled.
+    // Prefer IPv4 for probing when we have it.
     if (v4) probeHost.value = v4;
+
     probePort.value = probePort.value || "80";
     probeScheme.value = probeScheme.value || "http";
     probePath.value = probePath.value || "/";
@@ -402,11 +403,6 @@
         const res = data.result || {};
         const target = data.target || "";
 
-        // Dual-layer interpretation:
-        // - tcpReachable false -> blocked / no route / timeout / refused
-        // - edgeIntercept true -> reached something but it's an edge block, not proof of hosting
-        // - ok2xx true -> usable hosting
-        // - redirect true -> reachable but redirect
         if (res.tcpReachable === false) {
           setPill(probeHeadline, "⚠️ Not reachable", "warn");
           probeDetail.textContent = "Cloudflare could not connect (timeout/refused/DNS). This often indicates upstream NAT (CGNAT/carrier NAT), firewall blocking, or no service listening.";
@@ -454,7 +450,6 @@
     btn443.onclick = () => { probePort.value = "443"; probeScheme.value="https"; runProbe(443); };
     btn8080.onclick = () => { probePort.value = "8080"; probeScheme.value="http"; runProbe(8080); };
 
-    // Notes (kept)
     if (observed.size === 1) {
       note.innerHTML =
         "Note: Only <strong>" + [...observed][0] + "</strong> was observed. A single HTTP request only has one IP family. You’ll usually see both only if WebRTC reveals the other family or you force A-only/AAAA-only hostnames.";
@@ -465,7 +460,6 @@
       note.textContent = "";
     }
 
-    // Copy detected IPs (kept + more detail)
     const lines = [];
     if (cfIP) lines.push("Cloudflare: " + cfIP + " (" + classifyIP(cfIP).label + ")");
     if (forwardedFor) lines.push("X-Forwarded-For (first): " + forwardedFor);
@@ -481,7 +475,7 @@
         "",
         "Detected families: " + (observed.size ? [...observed].join(" + ") : "none"),
         "ASN/Org: " + (cfData?.asn ? ("AS"+cfData.asn) : "n/a") + " / " + (cfData?.asOrganization || "n/a")
-      ].join("\\n");
+      ].join("\n");
 
       try {
         await navigator.clipboard.writeText(report);

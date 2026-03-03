@@ -5,7 +5,8 @@ export async function onRequest(context) {
   const cfConnectingIp = h.get("CF-Connecting-IP") || "";
   const xff = h.get("X-Forwarded-For") || "";
   const xffFirst = xff ? xff.split(",")[0].trim() : "";
-  const ip = cfConnectingIp || xffFirst || "";
+
+  const ip = (cfConnectingIp || xffFirst || "").trim();
 
   const cf = req.cf || {};
 
