@@ -1,67 +1,151 @@
 <!doctype html>
 <html>
-<head><meta charset="utf-8"><title>CGNAT Dual Layer</title>
+<head>
+<meta charset="utf-8">
+<title>CGNAT Check</title>
 <style>
-body{font-family:system-ui;margin:2rem}
-.pill{padding:.2rem .6rem;border-radius:999px;font-weight:bold}
+body{font-family:system-ui;margin:2rem;background:#fafafa}
+.card{max-width:950px;margin:auto;background:white;padding:1.5rem;border:1px solid #ddd;border-radius:14px}
+h1{margin-top:0}
+.pill{display:inline-block;padding:.25rem .65rem;border-radius:999px;font-weight:700}
 .ok{background:#eaf7ef;color:#0a7a2f}
-.bad{background:#fdecec;color:#b91c1c}
 .warn{background:#fff4e6;color:#b45309}
-code{background:#f6f6f6;padding:.2rem .4rem;border-radius:6px}
+.bad{background:#fdecec;color:#b91c1c}
+.section{margin-top:1.5rem}
+hr{border:none;border-top:1px solid #eee;margin:1.25rem 0}
+input,select{padding:.45rem;border-radius:8px;border:1px solid #ccc}
+button{padding:.55rem .9rem;border-radius:8px;border:1px solid #ccc;background:white;cursor:pointer}
+button:hover{background:#f3f3f3}
+code{background:#f6f6f6;padding:.15rem .4rem;border-radius:6px}
 </style>
 </head>
 <body>
-<h2>CGNAT + Inbound (Dual Layer)</h2>
-<div id="signals"></div><hr>
-Host: <input id="host" style="width:260px">
-<button onclick="runProbe()">Run</button>
-<div id="probe"></div>
-<hr><button onclick="copyReport()">Copy Report</button>
+<div class="card">
+
+<h1>CGNAT Check</h1>
+<div id="headline"></div>
+<div id="summary" style="margin-top:.5rem;color:#555"></div>
+
+<hr>
+
+<div class="section">
+<strong>Signals</strong>
+<div id="signals" style="margin-top:.5rem"></div>
+</div>
+
+<hr>
+
+<div class="section">
+<strong>Inbound hosting check (HTTP/HTTPS)</strong>
+<div style="margin-top:.75rem">
+Host <input id="host" style="width:220px">
+Port <input id="port" value="80" style="width:70px">
+<select id="scheme">
+<option value="http">http</option>
+<option value="https">https</option>
+</select>
+<button onclick="runProbe()">Run inbound check</button>
+</div>
+
+<div id="probeResult" style="margin-top:1rem"></div>
+</div>
+
+<hr>
+<button onclick="copyReport()">Copy report</button>
+
+</div>
+
 <script>
-let lastProbe=null,cfData=null;
-fetch("/ip").then(r=>r.json()).then(d=>{
- cfData=d;
- document.getElementById("host").value=d.ip||"";
- document.getElementById("signals").innerHTML=
-  "Cloudflare IP: <code>"+d.ip+"</code><br>"+
-  "ASN/Org: "+(d.cf?.asn||"n/a")+" / "+(d.cf?.asOrganization||"n/a");
-});
-function runProbe(){
- const host=document.getElementById("host").value.trim();
- fetch("/probe?host="+encodeURIComponent(host))
- .then(r=>r.json()).then(d=>{
-  lastProbe=d;
-  const el=document.getElementById("probe");
-  if(!d.result||d.result.tcpReachable===false){
-    el.innerHTML='<span class="pill bad">❌ TCP Not Reachable</span>';
-  }else{
-    const tcp='<span class="pill ok">TCP Reachable</span>';
-    const http=d.result.ok?
-      '<span class="pill ok">HTTP 2xx</span>':
-      '<span class="pill warn">HTTP '+d.result.status+'</span>';
-    el.innerHTML=tcp+" "+http+"<br><code>"+d.target+"</code>";
-  }
- });
+let cfData=null;
+let lastProbe=null;
+
+function setHeadline(text,type){
+  document.getElementById("headline").innerHTML =
+    '<span class="pill '+type+'">'+text+'</span>';
 }
-function copyReport(){
- const lines=[];const ts=new Date().toISOString();
- lines.push("CGNAT Dual Layer Report ("+ts+")");
- if(cfData){
-  lines.push("Cloudflare IP: "+cfData.ip);
-  lines.push("ASN/Org: "+(cfData.cf?.asn||"n/a")+" / "+(cfData.cf?.asOrganization||"n/a"));
- }
- if(lastProbe){
-  lines.push("");lines.push("Inbound:");
-  lines.push("Target: "+lastProbe.target);
-  if(!lastProbe.result||lastProbe.result.tcpReachable===false){
-    lines.push("TCP Reachable: NO");
-  }else{
-    lines.push("TCP Reachable: YES");
-    lines.push("HTTP Status: "+lastProbe.result.status+" (ok="+lastProbe.result.ok+")");
+
+function inRFC6598(ip){
+  const parts=ip.split('.').map(Number);
+  if(parts.length!==4) return false;
+  const num=(parts[0]<<24)+(parts[1]<<16)+(parts[2]<<8)+parts[3];
+  const base=(100<<24)+(64<<16);
+  const end=(100<<24)+(127<<16)+(255<<8)+255;
+  return num>=base && num<=end;
+}
+
+fetch("/ip").then(r=>r.json()).then(d=>{
+  cfData=d;
+  document.getElementById("host").value=d.ip||"";
+  const isCarrier = d.cf?.asOrganization?.toLowerCase().includes("mobile") ||
+                    d.cf?.asOrganization?.toLowerCase().includes("t-mobile");
+
+  document.getElementById("signals").innerHTML =
+    "Cloudflare sees: <code>"+d.ip+"</code><br>"+
+    "ASN/Org: "+(d.cf?.asn||"n/a")+" / "+(d.cf?.asOrganization||"n/a");
+
+  if(inRFC6598(d.ip)){
+    setHeadline("RFC6598 CGNAT range detected","bad");
+    document.getElementById("summary").textContent =
+      "Your IPv4 is in 100.64.0.0/10 (true CGNAT).";
+  } else if(isCarrier){
+    setHeadline("Public IPv4, but likely behind carrier NAT","warn");
+    document.getElementById("summary").textContent =
+      "Mobile carriers often use shared NAT even with public IPv4.";
+  } else {
+    setHeadline("Public IPv4 (not RFC6598 range)","ok");
   }
- }
- navigator.clipboard.writeText(lines.join("\n"));
+});
+
+function runProbe(){
+  const host=document.getElementById("host").value.trim();
+  const port=document.getElementById("port").value.trim();
+  const scheme=document.getElementById("scheme").value;
+
+  fetch(`/probe?host=${encodeURIComponent(host)}&port=${port}&scheme=${scheme}`)
+  .then(r=>r.json()).then(d=>{
+    lastProbe=d;
+    const el=document.getElementById("probeResult");
+
+    if(!d.result || d.result.tcpReachable===false){
+      el.innerHTML='<span class="pill bad">Inbound TCP not reachable</span>';
+      return;
+    }
+
+    if(d.result.intercept){
+      el.innerHTML='<span class="pill warn">Edge/intercept detected</span>';
+      return;
+    }
+
+    if(d.result.ok){
+      el.innerHTML='<span class="pill ok">Inbound reachable (HTTP 2xx)</span>';
+    } else {
+      el.innerHTML='<span class="pill bad">Inbound not usable (HTTP '+d.result.status+')</span>';
+    }
+  });
+}
+
+function copyReport(){
+  const lines=[];
+  lines.push("CGNAT.xyz Report ("+new Date().toISOString()+")");
+  if(cfData){
+    lines.push("IP: "+cfData.ip);
+    lines.push("ASN/Org: "+(cfData.cf?.asn||"n/a")+" / "+(cfData.cf?.asOrganization||"n/a"));
+  }
+  if(lastProbe){
+    lines.push("");
+    lines.push("Inbound test:");
+    lines.push("Target: "+lastProbe.target);
+    if(!lastProbe.result || lastProbe.result.tcpReachable===false){
+      lines.push("TCP reachable: NO");
+    } else {
+      lines.push("TCP reachable: YES");
+      lines.push("HTTP usable (2xx): "+(lastProbe.result.ok?"YES":"NO"));
+      if(lastProbe.result.intercept) lines.push("Edge/intercept detected: YES");
+    }
+  }
+  navigator.clipboard.writeText(lines.join("\n"));
 }
 </script>
+
 </body>
 </html>
