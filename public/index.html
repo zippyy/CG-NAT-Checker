@@ -118,8 +118,14 @@
 
 <script>
   // ---------- IP helpers ----------
-  function isIPv6(ip) { return typeof ip === "string" && ip.includes(":"); }
-  function isIPv4(ip) { return typeof ip === "string" && /^\\d{1,3}(\\.\\d{1,3}){3}$/.test(ip); }
+  function normalizeIP(ip) { return (ip || "").trim(); }
+  function ipv4FromV6Mapped(ipRaw) {
+    const ip = normalizeIP(ipRaw).toLowerCase();
+    const m = ip.match(/^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/);
+    return m ? m[1] : null;
+  }
+  function isIPv6(ip) { ip = normalizeIP(ip); return typeof ip === "string" && ip.includes(":"); }
+  function isIPv4(ip) { ip = normalizeIP(ip); return typeof ip === "string" && /^\d{1,3}(\.\d{1,3}){3}$/.test(ip); }(\\.\\d{1,3}){3}$/.test(ip); }
 
   function ipv4ToInt(ip) {
     const p = ip.split(".").map(Number);
@@ -152,6 +158,9 @@
     return { type: "unknown", label: "IPv6 (unclassified/reserved)" };
   }
   function classifyIP(ip) {
+    ip = normalizeIP(ip);
+    const v4m = ipv4FromV6Mapped(ip);
+    if (v4m) ip = v4m;
     if (!ip) return { type: "unknown", label: "Unavailable" };
     if (isIPv6(ip)) return classifyIPv6(ip);
     if (isIPv4(ip)) return classifyIPv4(ip);
@@ -288,7 +297,7 @@
       const res = await fetch("/ip", { cache: "no-store" });
       if (!res.ok) throw new Error("Failed to fetch /ip (HTTP " + res.status + ")");
       const data = await res.json();
-      cfIP = data.ip || null;
+      cfIP = (data.ip || "").trim() || null;
       forwardedFor = data.forwardedFor || null;
       cfData = data.cf || null;
     } catch (e) {
@@ -338,7 +347,7 @@
     }
 
     // Headline verdict (kept style, improved wording)
-    const v4 = isIPv4(cfIP) ? cfIP : (stunV4 || null);
+    const v4 = (ipv4FromV6Mapped(cfIP) || (isIPv4(cfIP) ? cfIP : null) || stunV4 || null);
     const v4Info = v4 ? classifyIPv4(v4) : { type: "unknown", label: "Unavailable" };
     const likelyCarrier = looksLikeMobileCarrier(cfData?.asOrganization || "");
 
