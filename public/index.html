@@ -319,21 +319,69 @@
       try {
         const data = await runFlyProbe(host, port);
 
-        const udpOk = !!(data.udp && data.udp.reachable);
-        const tcpOk = !!(data.tcp && data.tcp.reachable);
+        const udp = data.udp || null;
+        const tcp = data.tcp || null;
 
-        if (udpOk || tcpOk) {
-          setPill(probeHeadline, "✅ Inbound looks reachable (at least one)", "ok");
+        const tcpConnectOk = !!(tcp && tcp.connect && tcp.connect.reachable);
+        const tcpConnectMs = (tcp && tcp.connect && typeof tcp.connect.latency_ms === "number") ? tcp.connect.latency_ms : null;
+
+        const httpInfo = (tcp && tcp.http && tcp.http.attempted) ? tcp.http : null;
+        const httpStatus = httpInfo && typeof httpInfo.status === "number" ? httpInfo.status : null;
+
+        const udpOk = !!(udp && udp.reachable);
+        const udpPortClosed = !!(udp && udp.port_closed);
+        const udpFiltered = !!(udp && udp.filtered);
+        const udpEcho = !!(udp && udp.echo_verified);
+        const udpMs = (udp && typeof udp.latency_ms === "number") ? udp.latency_ms : null;
+
+        // Verdict:
+        // - Green if TCP connect works OR UDP receives any response (best case)
+        // - Amber if UDP shows port-closed (host reachable but nothing listening)
+        // - Red otherwise (filtered/timeout/refused/fail)
+        if (tcpConnectOk || udpOk) {
+          setPill(probeHeadline, "✅ Inbound reachable (TCP and/or UDP)", "ok");
+        } else if (udpPortClosed) {
+          setPill(probeHeadline, "⚠️ Network reachable, but UDP port is closed", "warn");
         } else {
-          setPill(probeHeadline, "❌ Inbound not reachable (UDP+TCP failed)", "bad");
+          setPill(probeHeadline, "❌ Inbound not reachable (TCP+UDP)", "bad");
         }
 
         const lines = [];
-        if (data.udp) lines.push("UDP: " + (data.udp.reachable ? "reachable" : "not reachable") + (data.udp.error ? (" (" + data.udp.error + ")") : ""));
-        if (data.tcp) lines.push("TCP: " + (data.tcp.reachable ? "reachable" : "not reachable") + (data.tcp.error ? (" (" + data.tcp.error + ")") : ""));
-        probeDetail.textContent = lines.join(" · ");
 
-      } catch (e) {
+        // UDP line
+        if (udp) {
+          if (udpOk) {
+            lines.push("UDP: reachable" + (udpEcho ? " (echo verified)" : "") + (udpMs !== null ? (" • " + udpMs + "ms") : ""));
+          } else if (udpPortClosed) {
+            lines.push("UDP: port closed (ICMP)" + (udpMs !== null ? (" • " + udpMs + "ms") : ""));
+          } else if (udpFiltered) {
+            lines.push("UDP: no response (filtered/timeout)");
+          } else {
+            lines.push("UDP: not reachable" + (udp.error ? (" (" + udp.error + ")") : ""));
+          }
+        } else {
+          lines.push("UDP: unavailable");
+        }
+
+        // TCP line
+        if (tcp) {
+          if (tcpConnectOk) {
+            let s = "TCP: reachable" + (tcpConnectMs !== null ? (" • " + tcpConnectMs + "ms") : "");
+            if (httpStatus !== null) {
+              s += " • HTTP " + httpStatus;
+              // Important: HTTP status does NOT change reachability.
+              // Some networks (or Cloudflare) can return 403/404/530/etc and still mean the port is open.
+            }
+            lines.push(s);
+          } else {
+            lines.push("TCP: not reachable" + (tcp.connect && tcp.connect.error ? (" (" + tcp.connect.error + ")") : (tcp.error ? (" (" + tcp.error + ")") : "")));
+          }
+        } else {
+          lines.push("TCP: unavailable");
+        }
+
+        probeDetail.textContent = lines.join(" · ");
+} catch (e) {
         setPill(probeHeadline, "❌ Probe failed", "bad");
         probeDetail.textContent = String(e);
       }
