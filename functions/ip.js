@@ -6,7 +6,7 @@ export async function onRequest(context) {
   const xff = h.get("X-Forwarded-For") || "";
   const xffFirst = xff ? xff.split(",")[0].trim() : "";
 
-  const ip = (cfConnectingIp || xffFirst || "").trim();
+  const ip = cfConnectingIp || xffFirst || "";
 
   const cf = req.cf || {};
 
@@ -26,7 +26,6 @@ export async function onRequest(context) {
     headers: {
       "content-type": "application/json; charset=utf-8",
       "cache-control": "no-store",
-      "access-control-allow-origin": "*"
     }
   });
 }
