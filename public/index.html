@@ -6,7 +6,7 @@
   <title>CGNAT Check</title>
   <style>
     body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 2rem; }
-    .card { max-width: 900px; padding: 1.25rem 1.5rem; border: 1px solid #ddd; border-radius: 14px; }
+    .card { max-width: 980px; padding: 1.25rem 1.5rem; border: 1px solid #ddd; border-radius: 14px; }
     .row { margin: .35rem 0; }
     .pill { display:inline-block; padding:.15rem .55rem; border-radius:999px; font-weight:800; }
     .ok { color:#0a7a2f; background:#eaf7ef; }
@@ -17,6 +17,10 @@
     button { padding:.5rem .75rem; border-radius:10px; border:1px solid #ddd; background:#fff; cursor:pointer; }
     button:hover { background:#f8f8f8; }
     hr { border:none; border-top:1px solid #eee; margin:1rem 0; }
+    .grid { display:grid; grid-template-columns: 1fr; gap: .5rem; }
+    @media(min-width: 800px){ .grid { grid-template-columns: 1fr 1fr; } }
+    .box { border:1px solid #eee; border-radius:12px; padding:.75rem; }
+    .box h3 { margin:.1rem 0 .4rem; font-size: 1.02rem; }
   </style>
 </head>
 <body>
@@ -27,30 +31,26 @@
 
     <hr/>
 
-    <div class="row"><strong>Signals</strong></div>
-    <div class="row" id="sig_cf"></div>
-    <div class="row" id="sig_stun"></div>
+    <div class="grid">
+      <div class="box">
+        <h3>IPv4 view (forced)</h3>
+        <div class="row" id="v4sig"></div>
+        <div class="row muted" id="v4meta"></div>
+      </div>
+      <div class="box">
+        <h3>IPv6 view (forced)</h3>
+        <div class="row" id="v6sig"></div>
+        <div class="row muted" id="v6meta"></div>
+      </div>
+    </div>
 
     <hr/>
 
-    <div class="row"><strong>Detected families</strong></div>
-    <div class="row muted" id="families"></div>
-
-    <hr/>
-
-    <div class="row"><strong>Cloudflare (optional context)</strong></div>
-    <div class="row muted" id="cfmeta"></div>
-
-    <hr/>
-
-    <button id="copyBtn" style="display:none;">Copy detected IPs</button>
     <div class="row muted" id="note"></div>
+    <button id="copyBtn" style="display:none;">Copy detected IPs</button>
   </div>
 
 <script>
-  function isIPv6(ip) { return typeof ip === "string" && ip.includes(":"); }
-  function isIPv4(ip) { return typeof ip === "string" && /^\\d{1,3}(\\.\\d{1,3}){3}$/.test(ip); }
-
   function ipv4ToInt(ip) {
     const p = ip.split(".").map(Number);
     if (p.length !== 4 || p.some(n => Number.isNaN(n) || n < 0 || n > 255)) return null;
@@ -64,219 +64,102 @@
     return (ipInt & mask) === (baseInt & mask);
   }
   function classifyIPv4(ip) {
-    if (inCidr4(ip, "100.64.0.0", 10)) return { type: "cgnat", label: "CGNAT IPv4 (100.64.0.0/10)" };
-    if (inCidr4(ip, "10.0.0.0", 8)) return { type: "private", label: "Private IPv4 (10/8)" };
-    if (inCidr4(ip, "172.16.0.0", 12)) return { type: "private", label: "Private IPv4 (172.16/12)" };
-    if (inCidr4(ip, "192.168.0.0", 16)) return { type: "private", label: "Private IPv4 (192.168/16)" };
-    if (inCidr4(ip, "127.0.0.0", 8)) return { type: "reserved", label: "Loopback IPv4 (127/8)" };
-    if (inCidr4(ip, "169.254.0.0", 16)) return { type: "reserved", label: "Link-local IPv4 (169.254/16)" };
-    if (inCidr4(ip, "224.0.0.0", 4)) return { type: "reserved", label: "Multicast IPv4 (224/4)" };
-    return { type: "public", label: "Public routable IPv4" };
-  }
-
-  function classifyIPv6(ipRaw) {
-    const ip = (ipRaw || "").toLowerCase();
-    if (ip === "::1") return { type: "reserved", label: "Loopback IPv6 (::1)" };
-    if (ip.startsWith("fe80:")) return { type: "reserved", label: "Link-local IPv6 (fe80::/10)" };
-    if (ip.startsWith("fc") || ip.startsWith("fd")) return { type: "private", label: "ULA IPv6 (fc00::/7)" };
-    if (ip.startsWith("2001:db8:")) return { type: "reserved", label: "Documentation IPv6 (2001:db8::/32)" };
-    if (ip.startsWith("2") || ip.startsWith("3")) return { type: "public", label: "Public routable IPv6" };
-    return { type: "unknown", label: "IPv6 (unclassified/reserved)" };
-  }
-
-  function classifyIP(ip) {
     if (!ip) return { type: "unknown", label: "Unavailable" };
-    if (isIPv6(ip)) return classifyIPv6(ip);
-    if (isIPv4(ip)) return classifyIPv4(ip);
-    return ip.includes(":") ? classifyIPv6(ip) : classifyIPv4(ip);
+    if (inCidr4(ip, "100.64.0.0", 10)) return { type: "cgnat", label: "CGNAT IPv4 (100.64.0.0/10)" };
+    if (inCidr4(ip, "10.0.0.0", 8) || inCidr4(ip, "172.16.0.0", 12) || inCidr4(ip, "192.168.0.0", 16))
+      return { type: "private", label: "Private IPv4 (RFC1918)" };
+    return { type: "public", label: "Public routable IPv4 (not CGNAT range)" };
   }
 
-  async function getWebRTCServerReflexiveIPs(timeoutMs = 3500) {
-    const RTCPeerConnectionCtor = window.RTCPeerConnection || window.webkitRTCPeerConnection;
-    if (!RTCPeerConnectionCtor) return { ipv4: null, ipv6: null };
+  function fmtCF(data){
+    if (!data || !data.cf) return "";
+    const cf = data.cf;
+    const bits = [];
+    if (cf.asn) bits.push("ASN " + cf.asn);
+    if (cf.asOrganization) bits.push(cf.asOrganization);
+    if (cf.country) bits.push(cf.country);
+    return bits.join(" · ");
+  }
 
-    const pc = new RTCPeerConnectionCtor({
-      iceServers: [
-        { urls: "stun:stun.l.google.com:19302" },
-        { urls: "stun:stun1.l.google.com:19302" }
-      ]
-    });
-
-    let done = false;
-    const foundV4 = new Set();
-    const foundV6 = new Set();
-
-    function extractIP(candidateStr) {
-      const parts = candidateStr.split(" ");
-      for (const token of parts) {
-        if (/^\\d{1,3}(\\.\\d{1,3}){3}$/.test(token)) return token;
-        if (/^[0-9a-fA-F:]+$/.test(token) && token.includes(":")) return token;
-      }
-      return null;
+  async function getJson(url, timeoutMs=5000){
+    const ctrl = new AbortController();
+    const t = setTimeout(()=>ctrl.abort(), timeoutMs);
+    try{
+      const r = await fetch(url, { cache:"no-store", signal: ctrl.signal });
+      if(!r.ok) throw new Error("HTTP " + r.status);
+      return await r.json();
+    } finally {
+      clearTimeout(t);
     }
-
-    return await new Promise(async (resolve) => {
-      const timer = setTimeout(() => {
-        if (done) return;
-        done = true;
-        try { pc.close(); } catch {}
-        resolve({ ipv4: [...foundV4][0] || null, ipv6: [...foundV6][0] || null });
-      }, timeoutMs);
-
-      pc.onicecandidate = (event) => {
-        if (!event.candidate || done) return;
-        const cand = event.candidate.candidate || "";
-        if (!cand.includes(" typ srflx ")) return;
-
-        const ip = extractIP(cand);
-        if (!ip) return;
-        if (isIPv6(ip)) foundV6.add(ip);
-        else if (isIPv4(ip)) foundV4.add(ip);
-      };
-
-      try {
-        pc.createDataChannel("cgnatcheck");
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
-      } catch (e) {
-        clearTimeout(timer);
-        if (!done) {
-          done = true;
-          try { pc.close(); } catch {}
-          resolve({ ipv4: null, ipv6: null });
-        }
-        return;
-      }
-
-      const poll = setInterval(() => {
-        if (done) return clearInterval(poll);
-        const v4 = [...foundV4][0] || null;
-        const v6 = [...foundV6][0] || null;
-        if (v4 || v6) {
-          clearInterval(poll);
-          setTimeout(() => {
-            if (done) return;
-            clearTimeout(timer);
-            done = true;
-            try { pc.close(); } catch {}
-            resolve({ ipv4: [...foundV4][0] || null, ipv6: [...foundV6][0] || null });
-          }, 350);
-        }
-      }, 150);
-    });
   }
 
-  function setPill(el, text, kind) {
-    el.innerHTML = '<span class="pill ' + kind + '">' + text + '</span>';
-  }
-  function fmtSignal(name, ip) {
-    if (!ip) return name + ': <span class="muted">unavailable</span>';
-    const info = classifyIP(ip);
-    return name + ': <code>' + ip + '</code> — <span class="muted">' + info.label + '</span>';
-  }
-  function escapeHtml(s) {
-    return String(s)
-      .replaceAll("&", "&amp;").replaceAll("<", "&lt;")
-      .replaceAll(">", "&gt;").replaceAll('"', "&quot;")
-      .replaceAll("'", "&#039;");
+  function endpoint(sub){
+    return "https://" + sub + ".cgnat.xyz/ip";
   }
 
-  async function run() {
+  async function run(){
     const headline = document.getElementById("headline");
-    const summary = document.getElementById("summary");
-    const sigCF = document.getElementById("sig_cf");
-    const sigSTUN = document.getElementById("sig_stun");
-    const families = document.getElementById("families");
-    const cfmeta = document.getElementById("cfmeta");
-    const copyBtn = document.getElementById("copyBtn");
+    const summary  = document.getElementById("summary");
+    const v4sig = document.getElementById("v4sig");
+    const v6sig = document.getElementById("v6sig");
+    const v4meta = document.getElementById("v4meta");
+    const v6meta = document.getElementById("v6meta");
     const note = document.getElementById("note");
+    const copyBtn = document.getElementById("copyBtn");
 
-    let cfIP = null, cfData = null;
+    let v4 = null, v6 = null;
 
-    try {
-      const res = await fetch("/ip", { cache: "no-store" });
-      if (!res.ok) throw new Error("Failed to fetch /ip (HTTP " + res.status + ")");
-      const data = await res.json();
-      cfIP = data.ip || null;
-      cfData = data.cf || null;
-    } catch (e) {
-      setPill(headline, "❌ Check failed", "bad");
-      summary.textContent = String(e);
-      return;
-    }
+    try { v4 = await getJson(endpoint("ipv4")); }
+    catch(e){ v4 = { ip:null, error:String(e) }; }
 
-    const stun = await getWebRTCServerReflexiveIPs();
-    const stunV4 = stun.ipv4;
-    const stunV6 = stun.ipv6;
+    try { v6 = await getJson(endpoint("ipv6")); }
+    catch(e){ v6 = { ip:null, error:String(e) }; }
 
-    sigCF.innerHTML = fmtSignal("Cloudflare sees", cfIP);
-
-    const stunParts = [];
-    if (stunV4) stunParts.push(fmtSignal("WebRTC/STUN (IPv4)", stunV4));
-    if (stunV6) stunParts.push(fmtSignal("WebRTC/STUN (IPv6)", stunV6));
-    sigSTUN.innerHTML = stunParts.length ? stunParts.join("<br/>") : 'WebRTC/STUN: <span class="muted">unavailable</span>';
-
-    const observed = new Set();
-    if (cfIP) observed.add(isIPv6(cfIP) ? "IPv6" : "IPv4");
-    if (stunV4) observed.add("IPv4");
-    if (stunV6) observed.add("IPv6");
-    families.textContent = observed.size ? [...observed].join(" + ") : "none";
-
-    const cfInfo = classifyIP(cfIP);
-    const stunInfoV4 = stunV4 ? classifyIP(stunV4) : { type: "unknown" };
-
-    const anyCGNAT = (cfInfo.type === "cgnat") || (stunInfoV4.type === "cgnat");
-    const anyPublic = (cfInfo.type === "public")
-      || (stunV4 && classifyIP(stunV4).type === "public")
-      || (stunV6 && classifyIP(stunV6).type === "public");
-
-    if (anyCGNAT) {
-      setPill(headline, "⚠️ Likely CGNAT detected (IPv4)", "warn");
-      summary.textContent = "At least one IPv4 signal indicates CGNAT space (100.64.0.0/10).";
-    } else if (anyPublic) {
-      setPill(headline, "✅ Public routable address detected", "ok");
-      summary.textContent = "At least one signal indicates a publicly routable address (not the CGNAT range).";
+    if(v4.ip){
+      const c = classifyIPv4(v4.ip);
+      v4sig.innerHTML = `IPv4: <code>${v4.ip}</code> — <span class="muted">${c.label}</span>` + (v4.gateway ? ` <span class="muted">(gateway: ${v4.gateway})</span>` : "");
+      v4meta.textContent = fmtCF(v4);
     } else {
-      setPill(headline, "❌ Not publicly routable signal detected", "bad");
-      summary.textContent = "Signals look private/reserved, not directly routable on the public internet.";
+      v4sig.innerHTML = `IPv4: <span class="muted">unavailable</span> <span class="muted">(${v4.error || "unknown error"})</span>`;
+      v4meta.textContent = "";
     }
 
-    if (cfData) {
-      const bits = [];
-      if (cfData.asn) bits.push("ASN <code>" + cfData.asn + "</code>");
-      if (cfData.asOrganization) bits.push("Org <code>" + escapeHtml(cfData.asOrganization) + "</code>");
-      if (cfData.city || cfData.region || cfData.country) {
-        const loc = [cfData.city, cfData.region, cfData.country].filter(Boolean).join(", ");
-        bits.push("Location <code>" + escapeHtml(loc) + "</code>");
+    if(v6.ip){
+      v6sig.innerHTML = `IPv6: <code>${v6.ip}</code> — <span class="muted">Public routable IPv6 (if present)</span>` + (v6.gateway ? ` <span class="muted">(gateway: ${v6.gateway})</span>` : "");
+      v6meta.textContent = fmtCF(v6);
+    } else {
+      v6sig.innerHTML = `IPv6: <span class="muted">unavailable</span> <span class="muted">(${v6.error || "unknown error"})</span>`;
+      v6meta.textContent = "";
+    }
+
+    if(v4.ip){
+      const c = classifyIPv4(v4.ip);
+      if(c.type === "cgnat"){
+        headline.innerHTML = `<span class="pill warn">⚠️ Likely CGNAT detected (IPv4)</span>`;
+        summary.textContent = "Your observed IPv4 address is in the CGNAT range (100.64.0.0/10).";
+      } else if (c.type === "public") {
+        headline.innerHTML = `<span class="pill ok">✅ IPv4 is public (not CGNAT range)</span>`;
+        summary.textContent = "Your observed IPv4 address is not in the CGNAT range.";
+      } else {
+        headline.innerHTML = `<span class="pill bad">❌ IPv4 is not publicly routable</span>`;
+        summary.textContent = "Your observed IPv4 address looks private/reserved (not public internet routable).";
       }
-      if (cfData.colo) bits.push("Colo <code>" + escapeHtml(cfData.colo) + "</code>");
-      if (cfData.timezone) bits.push("TZ <code>" + escapeHtml(cfData.timezone) + "</code>");
-      cfmeta.innerHTML = bits.length ? bits.join(" · ") : '<span class="muted">No Cloudflare metadata available.</span>';
     } else {
-      cfmeta.innerHTML = '<span class="muted">No Cloudflare metadata available.</span>';
+      headline.innerHTML = `<span class="pill bad">❌ IPv4 check failed</span>`;
+      summary.textContent = "Could not obtain an IPv4 signal from ipv4.cgnat.xyz.";
     }
 
-    if (observed.size === 1) {
-      note.innerHTML =
-        "Note: Only <strong>" + [...observed][0] + "</strong> was observed. A single HTTP request only has one IP family. You’ll usually see both only if WebRTC reveals the other family or you force A-only/AAAA-only hostnames.";
-    } else if (!stunV4 && !stunV6) {
-      note.innerHTML =
-        "Note: WebRTC/STUN signal is unavailable (blocked by browser/privacy settings or network policy). Results are based on Cloudflare-only.";
-    } else {
-      note.textContent = "";
-    }
+    note.textContent = v6.ip ? "" : "Note: IPv6 endpoint failed (no IPv6 connectivity from this client, or a network policy blocked it).";
 
     const lines = [];
-    if (cfIP) lines.push("Cloudflare: " + cfIP + " (" + classifyIP(cfIP).label + ")");
-    if (stunV4) lines.push("WebRTC/STUN IPv4: " + stunV4 + " (" + classifyIP(stunV4).label + ")");
-    if (stunV6) lines.push("WebRTC/STUN IPv6: " + stunV6 + " (" + classifyIP(stunV6).label + ")");
-
+    if(v4.ip) lines.push("IPv4: " + v4.ip);
+    if(v6.ip) lines.push("IPv6: " + v6.ip);
     copyBtn.style.display = lines.length ? "inline-block" : "none";
     copyBtn.onclick = async () => {
       try {
         await navigator.clipboard.writeText(lines.join("\\n"));
         copyBtn.textContent = "Copied!";
-        setTimeout(() => (copyBtn.textContent = "Copy detected IPs"), 1200);
+        setTimeout(()=>copyBtn.textContent="Copy detected IPs", 1200);
       } catch {
         alert(lines.join("\\n"));
       }
