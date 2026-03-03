@@ -297,9 +297,14 @@
       const res = await fetch("/ip", { cache: "no-store" });
       if (!res.ok) throw new Error("Failed to fetch /ip (HTTP " + res.status + ")");
       const data = await res.json();
-      cfIP = (data.ip || "").trim() || null;
+      cfIP = normalizeIP(data.ip) || null;
       forwardedFor = data.forwardedFor || null;
       cfData = data.cf || null;
+
+      // Autofill probe host immediately with what Cloudflare sees (even if IPv6)
+      if (cfIP) {
+        probeHost.value = ipv4FromV6Mapped(cfIP) || cfIP;
+      }
     } catch (e) {
       setPill(headline, "❌ Check failed", "bad");
       summary.textContent = String(e);
@@ -347,7 +352,7 @@
     }
 
     // Headline verdict (kept style, improved wording)
-    const v4 = (ipv4FromV6Mapped(cfIP) || (isIPv4(cfIP) ? cfIP : null) || stunV4 || null);
+    const v4 = isIPv4(cfIP) ? cfIP : (stunV4 || null);
     const v4Info = v4 ? classifyIPv4(v4) : { type: "unknown", label: "Unavailable" };
     const likelyCarrier = looksLikeMobileCarrier(cfData?.asOrganization || "");
 
@@ -366,6 +371,7 @@
     }
 
     // Probe defaults (kept)
+    // Prefer IPv4 for probing when available, otherwise keep Cloudflare IP (IPv6) already filled.
     if (v4) probeHost.value = v4;
     probePort.value = probePort.value || "80";
     probeScheme.value = probeScheme.value || "http";
