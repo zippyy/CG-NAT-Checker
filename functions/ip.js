@@ -5,12 +5,24 @@ export async function onRequest(context) {
   const cfConnectingIp = h.get("CF-Connecting-IP") || "";
   const xff = h.get("X-Forwarded-For") || "";
   const xffFirst = xff ? xff.split(",")[0].trim() : "";
-
   const ip = cfConnectingIp || xffFirst || "";
+
   const cf = req.cf || {};
+
+  const headers = {
+    "content-type": "application/json; charset=utf-8",
+    "cache-control": "no-store",
+    // allow same-origin + optional cross-origin use
+    "access-control-allow-origin": "*",
+    "access-control-allow-methods": "GET, OPTIONS",
+    "access-control-allow-headers": "Content-Type",
+  };
+
+  if (req.method === "OPTIONS") return new Response(null, { headers });
 
   return new Response(JSON.stringify({
     ip,
+    forwardedFor: xffFirst || null,
     cf: {
       asn: cf.asn ?? null,
       asOrganization: cf.asOrganization ?? null,
@@ -20,10 +32,5 @@ export async function onRequest(context) {
       colo: cf.colo ?? null,
       timezone: cf.timezone ?? null,
     }
-  }), {
-    headers: {
-      "content-type": "application/json; charset=utf-8",
-      "cache-control": "no-store",
-    }
-  });
+  }), { headers });
 }

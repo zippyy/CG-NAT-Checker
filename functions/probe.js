@@ -12,8 +12,8 @@ function inCidr4(ip, base, maskBits) {
   const ipInt = ipv4ToInt(ip);
   const baseInt = ipv4ToInt(base);
   if (ipInt === null || baseInt === null) return false;
-  const mask = (0xFFFFFFFF << (32-maskBits))>>>0;
-  return (ipInt & mask)===(baseInt & mask);
+  const mask = maskBits === 0 ? 0 : (0xFFFFFFFF << (32 - maskBits)) >>> 0;
+  return (ipInt & mask) === (baseInt & mask);
 }
 
 function isPrivateOrReservedIPv4(ip) {
@@ -28,39 +28,69 @@ function isPrivateOrReservedIPv4(ip) {
   );
 }
 
+async function fetchWithTimeout(url, timeoutMs) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, {
+      method: "GET",
+      redirect: "manual",
+      signal: ctrl.signal,
+      headers: { "user-agent": "cgnat.xyz inbound probe" },
+    });
+    const text = await res.text().catch(() => "");
+    return {
+      ok: res.ok,
+      status: res.status,
+      statusText: res.statusText,
+      url: res.url,
+      sample: text.slice(0, 200),
+    };
+  } finally {
+    clearTimeout(t);
+  }
+}
+
 export async function onRequest(context) {
   const req = context.request;
   const url = new URL(req.url);
 
   const host = (url.searchParams.get("host") || "").trim();
-  const port = Number(url.searchParams.get("port") || 80);
+  const portStr = (url.searchParams.get("port") || "").trim();
   const scheme = (url.searchParams.get("scheme") || "http").trim().toLowerCase();
+  const path = (url.searchParams.get("path") || "/").trim() || "/";
 
-  if (!host) {
-    return new Response(JSON.stringify({ error: "host required" }), { status: 400 });
+  const headers = {
+    "content-type": "application/json; charset=utf-8",
+    "cache-control": "no-store",
+    "access-control-allow-origin": "*",
+    "access-control-allow-methods": "GET, OPTIONS",
+    "access-control-allow-headers": "Content-Type",
+  };
+
+  if (req.method === "OPTIONS") return new Response(null, { headers });
+
+  if (!host) return new Response(JSON.stringify({ error: "host is required" }), { status: 400, headers });
+  if (scheme !== "http" && scheme !== "https") {
+    return new Response(JSON.stringify({ error: "scheme must be http or https" }), { status: 400, headers });
+  }
+
+  const port = portStr ? Number(portStr) : (scheme === "https" ? 443 : 80);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    return new Response(JSON.stringify({ error: "invalid port" }), { status: 400, headers });
   }
 
   if (isIPv4(host) && isPrivateOrReservedIPv4(host)) {
-    return new Response(JSON.stringify({ error: "refusing private/reserved probe" }), { status: 400 });
+    return new Response(JSON.stringify({ error: "refusing to probe private/reserved IPv4" }), { status: 400, headers });
   }
 
-  const target = `${scheme}://${host}:${port}/`;
+  const safePath = path.startsWith("/") ? path : "/" + path;
+  const target = `${scheme}://${host}:${port}${safePath}`;
 
   try {
-    const res = await fetch(target, { redirect: "manual" });
-    return new Response(JSON.stringify({
-      target,
-      status: res.status,
-      ok: res.ok
-    }), {
-      headers: { "content-type": "application/json" }
-    });
+    const result = await fetchWithTimeout(target, 3500);
+    return new Response(JSON.stringify({ target, result }), { headers });
   } catch (e) {
-    return new Response(JSON.stringify({
-      target,
-      error: String(e)
-    }), {
-      headers: { "content-type": "application/json" }
-    });
+    return new Response(JSON.stringify({ target, error: String(e) }), { headers });
   }
 }
