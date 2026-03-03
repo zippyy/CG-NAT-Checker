@@ -1,151 +1,484 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
-<meta charset="utf-8">
-<title>CGNAT Check</title>
-<style>
-body{font-family:system-ui;margin:2rem;background:#fafafa}
-.card{max-width:950px;margin:auto;background:white;padding:1.5rem;border:1px solid #ddd;border-radius:14px}
-h1{margin-top:0}
-.pill{display:inline-block;padding:.25rem .65rem;border-radius:999px;font-weight:700}
-.ok{background:#eaf7ef;color:#0a7a2f}
-.warn{background:#fff4e6;color:#b45309}
-.bad{background:#fdecec;color:#b91c1c}
-.section{margin-top:1.5rem}
-hr{border:none;border-top:1px solid #eee;margin:1.25rem 0}
-input,select{padding:.45rem;border-radius:8px;border:1px solid #ccc}
-button{padding:.55rem .9rem;border-radius:8px;border:1px solid #ccc;background:white;cursor:pointer}
-button:hover{background:#f3f3f3}
-code{background:#f6f6f6;padding:.15rem .4rem;border-radius:6px}
-</style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>CGNAT Check</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 2rem; }
+    .card { max-width: 1100px; padding: 1.25rem 1.5rem; border: 1px solid #ddd; border-radius: 14px; }
+    .row { margin: .35rem 0; }
+    .pill { display:inline-block; padding:.15rem .55rem; border-radius:999px; font-weight:800; }
+    .ok { color:#0a7a2f; background:#eaf7ef; }
+    .warn { color:#b45309; background:#fff4e6; }
+    .bad { color:#b91c1c; background:#fdecec; }
+    .muted { color:#555; font-size: 0.95rem; }
+    code { background:#f6f6f6; padding:0.15rem 0.35rem; border-radius:6px; }
+    button { padding:.5rem .75rem; border-radius:10px; border:1px solid #ddd; background:#fff; cursor:pointer; }
+    button:hover { background:#f8f8f8; }
+    input, select { padding:.45rem .55rem; border:1px solid #ddd; border-radius:10px; }
+    hr { border:none; border-top:1px solid #eee; margin:1rem 0; }
+    .grid { display:grid; grid-template-columns: 1fr; gap: 1rem; }
+    @media (min-width: 960px) { .grid { grid-template-columns: 1fr 1fr; } }
+    .box { border:1px solid #eee; border-radius:14px; padding: 1rem; }
+    .box h3 { margin: .1rem 0 .65rem; }
+    .btnrow button { margin-right: .4rem; }
+    .small { font-size: .9rem; }
+  </style>
 </head>
 <body>
-<div class="card">
+  <div class="card">
+    <h1>CGNAT Check</h1>
 
-<h1>CGNAT Check</h1>
-<div id="headline"></div>
-<div id="summary" style="margin-top:.5rem;color:#555"></div>
+    <!-- Headline verdict (keep) -->
+    <div id="headline" class="row">Checking…</div>
+    <div id="summary" class="row muted"></div>
 
-<hr>
+    <hr/>
 
-<div class="section">
-<strong>Signals</strong>
-<div id="signals" style="margin-top:.5rem"></div>
-</div>
+    <!-- Signals (keep) -->
+    <div class="row"><strong>Signals</strong></div>
+    <div class="row" id="sig_cf"></div>
+    <div class="row" id="sig_stun"></div>
 
-<hr>
+    <hr/>
 
-<div class="section">
-<strong>Inbound hosting check (HTTP/HTTPS)</strong>
-<div style="margin-top:.75rem">
-Host <input id="host" style="width:220px">
-Port <input id="port" value="80" style="width:70px">
-<select id="scheme">
-<option value="http">http</option>
-<option value="https">https</option>
-</select>
-<button onclick="runProbe()">Run inbound check</button>
-</div>
+    <!-- CGNAT range vs Carrier NAT (keep) -->
+    <div class="row"><strong>CGNAT range vs. Carrier NAT</strong></div>
+    <div class="row muted" id="rangeExplain"></div>
 
-<div id="probeResult" style="margin-top:1rem"></div>
-</div>
+    <hr/>
 
-<hr>
-<button onclick="copyReport()">Copy report</button>
+    <!-- Inbound hosting check (keep layout + upgrade logic) -->
+    <div class="row"><strong>Inbound hosting check (HTTP/HTTPS)</strong></div>
+    <div class="row muted">This checks whether Cloudflare can reach a URL you host. It does not test arbitrary TCP/UDP ports.</div>
 
-</div>
+    <div class="grid" style="margin-top:.75rem;">
+      <div class="box">
+        <h3>Probe target</h3>
+        <div class="row">
+          <label>Host&nbsp;
+            <input id="probeHost" style="width: 320px;" placeholder="example.com or your public IP">
+          </label>
+        </div>
+        <div class="row">
+          <label>Scheme&nbsp;
+            <select id="probeScheme">
+              <option value="http">http</option>
+              <option value="https">https</option>
+            </select>
+          </label>
+          &nbsp;&nbsp;
+          <label>Port&nbsp;
+            <input id="probePort" style="width: 90px;" placeholder="80">
+          </label>
+          &nbsp;&nbsp;
+          <label>Path&nbsp;
+            <input id="probePath" style="width: 180px;" value="/">
+          </label>
+        </div>
+
+        <div class="row btnrow">
+          <button id="probeBtn">Run inbound check</button>
+          <button class="small" id="btn80">Test 80</button>
+          <button class="small" id="btn443">Test 443</button>
+          <button class="small" id="btn8080">Test 8080</button>
+        </div>
+
+        <div class="row muted small">
+          Tip: For best results, probe a port you’ve actually forwarded to a listening web service.
+        </div>
+      </div>
+
+      <div class="box">
+        <h3>Probe result</h3>
+        <div class="row" id="probeHeadline"><span class="muted">Run the probe to see if a public service is reachable.</span></div>
+        <div class="row muted" id="probeDetail"></div>
+      </div>
+    </div>
+
+    <hr/>
+
+    <!-- Detected families (keep) -->
+    <div class="row"><strong>Detected families</strong></div>
+    <div class="row muted" id="families"></div>
+
+    <hr/>
+
+    <!-- Cloudflare optional context (keep) -->
+    <div class="row"><strong>Cloudflare (optional context)</strong></div>
+    <div class="row muted" id="cfmeta"></div>
+
+    <hr/>
+
+    <!-- Copy button + note (keep) -->
+    <button id="copyBtn" style="display:none;">Copy detected IPs</button>
+    <div class="row muted" id="note"></div>
+  </div>
 
 <script>
-let cfData=null;
-let lastProbe=null;
+  // ---------- IP helpers ----------
+  function isIPv6(ip) { return typeof ip === "string" && ip.includes(":"); }
+  function isIPv4(ip) { return typeof ip === "string" && /^\\d{1,3}(\\.\\d{1,3}){3}$/.test(ip); }
 
-function setHeadline(text,type){
-  document.getElementById("headline").innerHTML =
-    '<span class="pill '+type+'">'+text+'</span>';
-}
-
-function inRFC6598(ip){
-  const parts=ip.split('.').map(Number);
-  if(parts.length!==4) return false;
-  const num=(parts[0]<<24)+(parts[1]<<16)+(parts[2]<<8)+parts[3];
-  const base=(100<<24)+(64<<16);
-  const end=(100<<24)+(127<<16)+(255<<8)+255;
-  return num>=base && num<=end;
-}
-
-fetch("/ip").then(r=>r.json()).then(d=>{
-  cfData=d;
-  document.getElementById("host").value=d.ip||"";
-  const isCarrier = d.cf?.asOrganization?.toLowerCase().includes("mobile") ||
-                    d.cf?.asOrganization?.toLowerCase().includes("t-mobile");
-
-  document.getElementById("signals").innerHTML =
-    "Cloudflare sees: <code>"+d.ip+"</code><br>"+
-    "ASN/Org: "+(d.cf?.asn||"n/a")+" / "+(d.cf?.asOrganization||"n/a");
-
-  if(inRFC6598(d.ip)){
-    setHeadline("RFC6598 CGNAT range detected","bad");
-    document.getElementById("summary").textContent =
-      "Your IPv4 is in 100.64.0.0/10 (true CGNAT).";
-  } else if(isCarrier){
-    setHeadline("Public IPv4, but likely behind carrier NAT","warn");
-    document.getElementById("summary").textContent =
-      "Mobile carriers often use shared NAT even with public IPv4.";
-  } else {
-    setHeadline("Public IPv4 (not RFC6598 range)","ok");
+  function ipv4ToInt(ip) {
+    const p = ip.split(".").map(Number);
+    if (p.length !== 4 || p.some(n => Number.isNaN(n) || n < 0 || n > 255)) return null;
+    return ((p[0] << 24) >>> 0) + (p[1] << 16) + (p[2] << 8) + p[3];
   }
-});
+  function inCidr4(ip, base, maskBits) {
+    const ipInt = ipv4ToInt(ip);
+    const baseInt = ipv4ToInt(base);
+    if (ipInt === null || baseInt === null) return false;
+    const mask = maskBits === 0 ? 0 : (0xFFFFFFFF << (32 - maskBits)) >>> 0;
+    return (ipInt & mask) === (baseInt & mask);
+  }
+  function classifyIPv4(ip) {
+    if (inCidr4(ip, "100.64.0.0", 10)) return { type: "cgnat", label: "RFC6598 CGNAT range (100.64.0.0/10)" };
+    if (inCidr4(ip, "10.0.0.0", 8) || inCidr4(ip, "172.16.0.0", 12) || inCidr4(ip, "192.168.0.0", 16))
+      return { type: "private", label: "Private IPv4 (RFC1918)" };
+    if (inCidr4(ip, "127.0.0.0", 8)) return { type: "reserved", label: "Loopback IPv4 (127/8)" };
+    if (inCidr4(ip, "169.254.0.0", 16)) return { type: "reserved", label: "Link-local IPv4 (169.254/16)" };
+    if (inCidr4(ip, "224.0.0.0", 4)) return { type: "reserved", label: "Multicast/Reserved IPv4 (224/4)" };
+    return { type: "public", label: "Public IPv4 (not RFC6598 range)" };
+  }
+  function classifyIPv6(ipRaw) {
+    const ip = (ipRaw || "").toLowerCase();
+    if (ip === "::1") return { type: "reserved", label: "Loopback IPv6 (::1)" };
+    if (ip.startsWith("fe80:")) return { type: "reserved", label: "Link-local IPv6 (fe80::/10)" };
+    if (ip.startsWith("fc") || ip.startsWith("fd")) return { type: "private", label: "ULA IPv6 (fc00::/7)" };
+    if (ip.startsWith("2001:db8:")) return { type: "reserved", label: "Documentation IPv6 (2001:db8::/32)" };
+    if (ip.startsWith("2") || ip.startsWith("3")) return { type: "public", label: "Public routable IPv6" };
+    return { type: "unknown", label: "IPv6 (unclassified/reserved)" };
+  }
+  function classifyIP(ip) {
+    if (!ip) return { type: "unknown", label: "Unavailable" };
+    if (isIPv6(ip)) return classifyIPv6(ip);
+    if (isIPv4(ip)) return classifyIPv4(ip);
+    return ip.includes(":") ? classifyIPv6(ip) : classifyIPv4(ip);
+  }
 
-function runProbe(){
-  const host=document.getElementById("host").value.trim();
-  const port=document.getElementById("port").value.trim();
-  const scheme=document.getElementById("scheme").value;
+  // ---------- WebRTC/STUN (kept) ----------
+  async function getWebRTCServerReflexiveIPs(timeoutMs = 3500) {
+    const RTCPeerConnectionCtor = window.RTCPeerConnection || window.webkitRTCPeerConnection;
+    if (!RTCPeerConnectionCtor) return { ipv4: null, ipv6: null };
 
-  fetch(`/probe?host=${encodeURIComponent(host)}&port=${port}&scheme=${scheme}`)
-  .then(r=>r.json()).then(d=>{
-    lastProbe=d;
-    const el=document.getElementById("probeResult");
+    const pc = new RTCPeerConnectionCtor({
+      iceServers: [
+        { urls: "stun:stun.l.google.com:19302" },
+        { urls: "stun:stun1.l.google.com:19302" }
+      ]
+    });
 
-    if(!d.result || d.result.tcpReachable===false){
-      el.innerHTML='<span class="pill bad">Inbound TCP not reachable</span>';
+    let done = false;
+    const foundV4 = new Set();
+    const foundV6 = new Set();
+
+    function extractIP(candidateStr) {
+      const parts = candidateStr.split(" ");
+      for (const token of parts) {
+        if (/^\\d{1,3}(\\.\\d{1,3}){3}$/.test(token)) return token;
+        if (/^[0-9a-fA-F:]+$/.test(token) && token.includes(":")) return token;
+      }
+      return null;
+    }
+
+    return await new Promise(async (resolve) => {
+      const timer = setTimeout(() => {
+        if (done) return;
+        done = true;
+        try { pc.close(); } catch {}
+        resolve({ ipv4: [...foundV4][0] || null, ipv6: [...foundV6][0] || null });
+      }, timeoutMs);
+
+      pc.onicecandidate = (event) => {
+        if (!event.candidate || done) return;
+        const cand = event.candidate.candidate || "";
+        if (!cand.includes(" typ srflx ")) return;
+        const ip = extractIP(cand);
+        if (!ip) return;
+        if (isIPv6(ip)) foundV6.add(ip);
+        else if (isIPv4(ip)) foundV4.add(ip);
+      };
+
+      try {
+        pc.createDataChannel("cgnatcheck");
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+      } catch (e) {
+        clearTimeout(timer);
+        if (!done) {
+          done = true;
+          try { pc.close(); } catch {}
+          resolve({ ipv4: null, ipv6: null });
+        }
+        return;
+      }
+
+      const poll = setInterval(() => {
+        if (done) return clearInterval(poll);
+        const v4 = [...foundV4][0] || null;
+        const v6 = [...foundV6][0] || null;
+        if (v4 || v6) {
+          clearInterval(poll);
+          setTimeout(() => {
+            if (done) return;
+            clearTimeout(timer);
+            done = true;
+            try { pc.close(); } catch {}
+            resolve({ ipv4: [...foundV4][0] || null, ipv6: [...foundV6][0] || null });
+          }, 350);
+        }
+      }, 150);
+    });
+  }
+
+  // ---------- UI helpers ----------
+  function setPill(el, text, kind) {
+    el.innerHTML = '<span class="pill ' + kind + '">' + text + '</span>';
+  }
+  function fmtSignal(name, ip) {
+    if (!ip) return name + ': <span class="muted">unavailable</span>';
+    const info = classifyIP(ip);
+    return name + ': <code>' + ip + '</code> — <span class="muted">' + info.label + '</span>';
+  }
+  function escapeHtml(s) {
+    return String(s)
+      .replaceAll("&", "&amp;").replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;").replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+  }
+
+  function looksLikeMobileCarrier(org) {
+    if (!org) return false;
+    const o = org.toLowerCase();
+    const keys = ["t-mobile","verizon","at&t","att ","sprint","us cellular","telstra","optus","vodafone","rogers","bell","digicel"];
+    return keys.some(k => o.includes(k));
+  }
+
+  // ---------- Main run ----------
+  async function run() {
+    const headline = document.getElementById("headline");
+    const summary = document.getElementById("summary");
+    const sigCF = document.getElementById("sig_cf");
+    const sigSTUN = document.getElementById("sig_stun");
+    const rangeExplain = document.getElementById("rangeExplain");
+    const families = document.getElementById("families");
+    const cfmeta = document.getElementById("cfmeta");
+    const copyBtn = document.getElementById("copyBtn");
+    const note = document.getElementById("note");
+
+    const probeHost = document.getElementById("probeHost");
+    const probeScheme = document.getElementById("probeScheme");
+    const probePort = document.getElementById("probePort");
+    const probePath = document.getElementById("probePath");
+    const probeBtn = document.getElementById("probeBtn");
+    const probeHeadline = document.getElementById("probeHeadline");
+    const probeDetail = document.getElementById("probeDetail");
+
+    const btn80 = document.getElementById("btn80");
+    const btn443 = document.getElementById("btn443");
+    const btn8080 = document.getElementById("btn8080");
+
+    let cfIP=null, cfData=null, forwardedFor=null;
+    let stunV4=null, stunV6=null;
+
+    // Fetch /ip (kept)
+    try {
+      const res = await fetch("/ip", { cache: "no-store" });
+      if (!res.ok) throw new Error("Failed to fetch /ip (HTTP " + res.status + ")");
+      const data = await res.json();
+      cfIP = data.ip || null;
+      forwardedFor = data.forwardedFor || null;
+      cfData = data.cf || null;
+    } catch (e) {
+      setPill(headline, "❌ Check failed", "bad");
+      summary.textContent = String(e);
       return;
     }
 
-    if(d.result.intercept){
-      el.innerHTML='<span class="pill warn">Edge/intercept detected</span>';
-      return;
+    // STUN (kept)
+    const stun = await getWebRTCServerReflexiveIPs();
+    stunV4 = stun.ipv4;
+    stunV6 = stun.ipv6;
+
+    sigCF.innerHTML = fmtSignal("Cloudflare sees", cfIP);
+    const stunParts = [];
+    if (stunV4) stunParts.push(fmtSignal("WebRTC/STUN (IPv4)", stunV4));
+    if (stunV6) stunParts.push(fmtSignal("WebRTC/STUN (IPv6)", stunV6));
+    sigSTUN.innerHTML = stunParts.length ? stunParts.join("<br/>") : 'WebRTC/STUN: <span class="muted">unavailable</span>';
+
+    // Detected families (kept)
+    const observed = new Set();
+    if (cfIP) observed.add(isIPv6(cfIP) ? "IPv6" : "IPv4");
+    if (stunV4) observed.add("IPv4");
+    if (stunV6) observed.add("IPv6");
+    families.textContent = observed.size ? [...observed].join(" + ") : "none";
+
+    // Range vs carrier explanation (kept)
+    rangeExplain.innerHTML =
+      "• <strong>RFC6598 CGNAT range</strong> is strictly <code>100.64.0.0/10</code>. " +
+      "• <strong>Carrier/shared NAT</strong> can still exist with a public IPv4 (common on mobile ISPs). " +
+      "That’s why the <strong>inbound hosting check</strong> matters.";
+
+    // CF optional context (kept)
+    if (cfData) {
+      const bits = [];
+      if (cfData.asn) bits.push("ASN <code>" + cfData.asn + "</code>");
+      if (cfData.asOrganization) bits.push("Org <code>" + escapeHtml(cfData.asOrganization) + "</code>");
+      if (cfData.city || cfData.region || cfData.country) {
+        const loc = [cfData.city, cfData.region, cfData.country].filter(Boolean).join(", ");
+        bits.push("Location <code>" + escapeHtml(loc) + "</code>");
+      }
+      if (cfData.colo) bits.push("Colo <code>" + escapeHtml(cfData.colo) + "</code>");
+      if (cfData.timezone) bits.push("TZ <code>" + escapeHtml(cfData.timezone) + "</code>");
+      cfmeta.innerHTML = bits.length ? bits.join(" · ") : '<span class="muted">No Cloudflare metadata available.</span>';
+    } else {
+      cfmeta.innerHTML = '<span class="muted">No Cloudflare metadata available.</span>';
     }
 
-    if(d.result.ok){
-      el.innerHTML='<span class="pill ok">Inbound reachable (HTTP 2xx)</span>';
-    } else {
-      el.innerHTML='<span class="pill bad">Inbound not usable (HTTP '+d.result.status+')</span>';
-    }
-  });
-}
+    // Headline verdict (kept style, improved wording)
+    const v4 = isIPv4(cfIP) ? cfIP : (stunV4 || null);
+    const v4Info = v4 ? classifyIPv4(v4) : { type: "unknown", label: "Unavailable" };
+    const likelyCarrier = looksLikeMobileCarrier(cfData?.asOrganization || "");
 
-function copyReport(){
-  const lines=[];
-  lines.push("CGNAT.xyz Report ("+new Date().toISOString()+")");
-  if(cfData){
-    lines.push("IP: "+cfData.ip);
-    lines.push("ASN/Org: "+(cfData.cf?.asn||"n/a")+" / "+(cfData.cf?.asOrganization||"n/a"));
-  }
-  if(lastProbe){
-    lines.push("");
-    lines.push("Inbound test:");
-    lines.push("Target: "+lastProbe.target);
-    if(!lastProbe.result || lastProbe.result.tcpReachable===false){
-      lines.push("TCP reachable: NO");
+    if (v4Info.type === "cgnat") {
+      setPill(headline, "⚠️ RFC6598 CGNAT range detected (IPv4)", "warn");
+      summary.textContent = "Your observed IPv4 is in 100.64.0.0/10 (RFC6598). Inbound hosting typically won't work without an upstream public IP.";
+    } else if (v4Info.type === "public" && likelyCarrier) {
+      setPill(headline, "⚠️ Public IPv4, but likely behind carrier NAT", "warn");
+      summary.textContent = "Many mobile carriers use shared NAT even when your external IPv4 is public. Use the inbound check below to confirm reachability.";
+    } else if (v4Info.type === "public") {
+      setPill(headline, "✅ Public IPv4 detected (not RFC6598 range)", "ok");
+      summary.textContent = "Your observed IPv4 is not in RFC6598 CGNAT range. Inbound hosting still depends on forwarding/firewalls—use the inbound check below.";
     } else {
-      lines.push("TCP reachable: YES");
-      lines.push("HTTP usable (2xx): "+(lastProbe.result.ok?"YES":"NO"));
-      if(lastProbe.result.intercept) lines.push("Edge/intercept detected: YES");
+      setPill(headline, "❌ No public IPv4 signal detected", "bad");
+      summary.textContent = "Signals look private/reserved or unavailable. Inbound hosting will typically fail.";
     }
+
+    // Probe defaults (kept)
+    if (v4) probeHost.value = v4;
+    probePort.value = probePort.value || "80";
+    probeScheme.value = probeScheme.value || "http";
+    probePath.value = probePath.value || "/";
+
+    async function runProbe(portOverride=null) {
+      const host = probeHost.value.trim();
+      const scheme = probeScheme.value;
+      const port = portOverride !== null ? String(portOverride) : (probePort.value.trim() || "");
+      const path = (probePath.value.trim() || "/");
+
+      probeHeadline.innerHTML = '<span class="muted">Checking…</span>';
+      probeDetail.textContent = "";
+
+      const qs = new URLSearchParams({ host, scheme, path });
+      if (port) qs.set("port", port);
+
+      try {
+        const r = await fetch("/probe?" + qs.toString(), { cache: "no-store" });
+        const data = await r.json();
+
+        if (data.error) {
+          setPill(probeHeadline, "⚠️ Probe error", "warn");
+          probeDetail.textContent = data.error;
+          return;
+        }
+
+        const res = data.result || {};
+        const target = data.target || "";
+
+        // Dual-layer interpretation:
+        // - tcpReachable false -> blocked / no route / timeout / refused
+        // - edgeIntercept true -> reached something but it's an edge block, not proof of hosting
+        // - ok2xx true -> usable hosting
+        // - redirect true -> reachable but redirect
+        if (res.tcpReachable === false) {
+          setPill(probeHeadline, "⚠️ Not reachable", "warn");
+          probeDetail.textContent = "Cloudflare could not connect (timeout/refused/DNS). This often indicates upstream NAT (CGNAT/carrier NAT), firewall blocking, or no service listening.";
+          return;
+        }
+
+        if (res.edgeIntercept) {
+          setPill(probeHeadline, "⚠️ Edge/intercept detected", "warn");
+          probeDetail.innerHTML =
+            escapeHtml(target) + " → HTTP " + (res.status ?? "?") +
+            "<br/>This looks like a Cloudflare edge block (e.g., 1003 / Ray ID). It does <strong>not</strong> prove inbound hosting works.";
+          return;
+        }
+
+        if (res.captivePortalLikely) {
+          setPill(probeHeadline, "⚠️ Captive/intercept likely", "warn");
+          probeDetail.innerHTML =
+            escapeHtml(target) + " → HTTP " + (res.status ?? "?") +
+            "<br/>Response resembles a captive portal/walled garden. Inbound hosting is unlikely reliable.";
+          return;
+        }
+
+        if (res.ok2xx) {
+          setPill(probeHeadline, "✅ Reachable (HTTP 2xx)", "ok");
+          probeDetail.textContent = target + " → HTTP " + res.status + " (usable)";
+          return;
+        }
+
+        if (res.redirect) {
+          setPill(probeHeadline, "✅ Reachable (redirect)", "ok");
+          probeDetail.textContent = target + " → HTTP " + res.status + " (redirect)";
+          return;
+        }
+
+        setPill(probeHeadline, "⚠️ Reachable but not usable", "warn");
+        probeDetail.textContent = target + " → HTTP " + (res.status ?? "?") + " (not 2xx)";
+      } catch (e) {
+        setPill(probeHeadline, "⚠️ Probe failed", "warn");
+        probeDetail.textContent = String(e);
+      }
+    }
+
+    probeBtn.onclick = () => runProbe(null);
+    btn80.onclick = () => { probePort.value = "80"; probeScheme.value="http"; runProbe(80); };
+    btn443.onclick = () => { probePort.value = "443"; probeScheme.value="https"; runProbe(443); };
+    btn8080.onclick = () => { probePort.value = "8080"; probeScheme.value="http"; runProbe(8080); };
+
+    // Notes (kept)
+    if (observed.size === 1) {
+      note.innerHTML =
+        "Note: Only <strong>" + [...observed][0] + "</strong> was observed. A single HTTP request only has one IP family. You’ll usually see both only if WebRTC reveals the other family or you force A-only/AAAA-only hostnames.";
+    } else if (!stunV4 && !stunV6) {
+      note.innerHTML =
+        "Note: WebRTC/STUN signal is unavailable (blocked by browser/privacy settings or network policy). Results are based on Cloudflare-only.";
+    } else {
+      note.textContent = "";
+    }
+
+    // Copy detected IPs (kept + more detail)
+    const lines = [];
+    if (cfIP) lines.push("Cloudflare: " + cfIP + " (" + classifyIP(cfIP).label + ")");
+    if (forwardedFor) lines.push("X-Forwarded-For (first): " + forwardedFor);
+    if (stunV4) lines.push("WebRTC/STUN IPv4: " + stunV4 + " (" + classifyIP(stunV4).label + ")");
+    if (stunV6) lines.push("WebRTC/STUN IPv6: " + stunV6 + " (" + classifyIP(stunV6).label + ")");
+
+    copyBtn.style.display = lines.length ? "inline-block" : "none";
+    copyBtn.onclick = async () => {
+      const report = [
+        "CGNAT.xyz Report (" + new Date().toISOString() + ")",
+        "",
+        ...lines,
+        "",
+        "Detected families: " + (observed.size ? [...observed].join(" + ") : "none"),
+        "ASN/Org: " + (cfData?.asn ? ("AS"+cfData.asn) : "n/a") + " / " + (cfData?.asOrganization || "n/a")
+      ].join("\\n");
+
+      try {
+        await navigator.clipboard.writeText(report);
+        copyBtn.textContent = "Copied!";
+        setTimeout(() => (copyBtn.textContent = "Copy detected IPs"), 1200);
+      } catch {
+        alert(report);
+      }
+    };
   }
-  navigator.clipboard.writeText(lines.join("\n"));
-}
+
+  run();
 </script>
-
 </body>
 </html>
