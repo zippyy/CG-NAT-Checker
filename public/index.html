@@ -1,48 +1,424 @@
-<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
-<html>
+<!doctype html>
+<html lang="en">
 <head>
-  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-  <meta http-equiv="Content-Style-Type" content="text/css">
-  <title></title>
-  <meta name="Generator" content="Cocoa HTML Writer">
-  <meta name="CocoaVersion" content="2685.3">
-  <style type="text/css">
-    p.p2 {margin: 0.0px 0.0px 0.0px 0.0px; font: 12.0px 'Helvetica Neue'; -webkit-text-stroke: #000000}
-    p.p3 {margin: 0.0px 0.0px 0.0px 0.0px; font: 11.4px 'Helvetica Neue'; color: #434343; -webkit-text-stroke: #434343; min-height: 13.0px}
-    p.p4 {margin: 0.0px 0.0px 0.0px 0.0px; font: 12.0px 'Helvetica Neue'; color: #6d6d6d; -webkit-text-stroke: #6d6d6d; min-height: 15.0px}
-    p.p5 {margin: 0.0px 0.0px 0.0px 0.0px; font: 12.0px 'Helvetica Neue'; -webkit-text-stroke: #000000; min-height: 15.0px}
-    p.p6 {margin: 0.0px 0.0px 0.0px 0.0px; font: 11.0px 'Helvetica Neue'; -webkit-text-stroke: #000000; background-color: #ffffff; min-height: 13.0px}
-    p.p7 {margin: 0.0px 0.0px 0.0px 0.0px; font: 11.4px 'Helvetica Neue'; color: #434343; -webkit-text-stroke: #434343}
-    p.p8 {margin: 0.0px 0.0px 0.0px 0.0px; font: 11.0px 'Helvetica Neue'; -webkit-text-stroke: #000000; background-color: #ffffff}
-    p.p9 {margin: 0.0px 0.0px 0.0px 0.0px; text-align: center; font: 11.0px 'Helvetica Neue'; color: #000000; color: rgba(0, 0, 0, 0.85); -webkit-text-stroke: rgba(0, 0, 0, 0.85); background-color: #ffffff}
-    p.p10 {margin: 0.0px 0.0px 0.0px 0.0px; text-align: center; font: 10.8px 'Helvetica Neue'; color: #000000; color: rgba(0, 0, 0, 0.85); -webkit-text-stroke: rgba(0, 0, 0, 0.85); background-color: #ffffff}
-    span.s1 {font-kerning: none}
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>CGNAT.xyz</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 2rem; }
+    .card { max-width: 980px; padding: 1.25rem 1.5rem; border: 1px solid #ddd; border-radius: 14px; }
+    .row { margin: .45rem 0; }
+    .pill { display:inline-block; padding:.18rem .6rem; border-radius:999px; font-weight:800; }
+    .ok { color:#0a7a2f; background:#eaf7ef; }
+    .warn { color:#b45309; background:#fff4e6; }
+    .bad { color:#b91c1c; background:#fdecec; }
+    .muted { color:#555; font-size: 0.95rem; }
+    code { background:#f6f6f6; padding:0.15rem 0.35rem; border-radius:6px; }
+    button, input, select { padding:.5rem .65rem; border-radius:10px; border:1px solid #ddd; background:#fff; }
+    button { cursor:pointer; }
+    button:hover { background:#f8f8f8; }
+    hr { border:none; border-top:1px solid #eee; margin:1rem 0; }
+    .grid { display:grid; grid-template-columns: 1fr; gap: .75rem; }
+    @media (min-width: 860px) { .grid { grid-template-columns: 1fr 1fr; } }
+    .small { padding:.35rem .55rem; font-size:.9rem; }
+    .field { display:flex; gap:.5rem; flex-wrap: wrap; align-items:center; }
   </style>
 </head>
 <body>
-<h1 style="margin: 0.0px 0.0px 16.1px 0.0px; font: 24.0px 'Helvetica Neue'; -webkit-text-stroke: #000000"><span class="s1"><b>CGNAT.xyz</b></span></h1>
-<p class="p2"><span class="s1">Checking…</span></p>
-<p class="p3"><span class="s1"></span><br></p>
-<p class="p4"><span class="s1"></span><br></p>
-<p class="p2"><span class="s1"><b>Signals</b><b></b></span></p>
-<p class="p5"><span class="s1"></span><br></p>
-<p class="p5"><span class="s1"></span><br></p>
-<p class="p3"><span class="s1"></span><br></p>
-<p class="p4"><span class="s1"></span><br></p>
-<p class="p2"><span class="s1"><b>Inbound probe</b><b></b></span></p>
-<p class="p6"><span class="s1"></span><br></p>
-<p class="p7"><span class="s1">Port</span></p>
-<p class="p8"><span class="s1">51820</span></p>
-<p class="p9"><span class="s1">Run probe</span></p>
-<p class="p10"><span class="s1">51820</span></p>
-<p class="p10"><span class="s1">80</span></p>
-<p class="p10"><span class="s1">443</span></p>
-<p class="p5"><span class="s1"></span><br></p>
-<p class="p3"><span class="s1"></span><br></p>
-<p class="p2"><span class="s1"><b>Cloudflare context</b><b></b></span></p>
-<p class="p3"><span class="s1"></span><br></p>
-<p class="p4"><span class="s1"></span><br></p>
-<p class="p2"><span class="s1"><b>Copy report</b><b></b></span></p>
-<p class="p3"><span class="s1"></span><br></p>
+  <div class="card">
+    <h1>CGNAT.xyz</h1>
+    <div id="headline" class="row">Checking…</div>
+    <div id="summary" class="row muted"></div>
+
+    <hr/>
+
+    <div class="grid">
+      <div>
+        <div class="row"><strong>Signals</strong></div>
+        <div class="row" id="sig_cf"></div>
+        <div class="row" id="sig_stun"></div>
+        <div class="row muted" id="families"></div>
+
+        <hr/>
+
+        <div class="row"><strong>Inbound probe (from Fly)</strong></div>
+        <div class="row muted">This uses a server-side Pages proxy to call your Fly probe (so your Fly PROBE_KEY stays secret).</div>
+        <div class="row">
+          <div class="field">
+            <label class="muted">Probe host</label>
+            <input id="probeHost" placeholder="Auto-filled from Cloudflare IP" size="20"/>
+            <label class="muted">Port</label>
+            <input id="probePort" value="51820" size="7"/>
+            <button id="probeBtn">Run probe</button>
+            <button class="small" id="btn51820">51820</button>
+            <button class="small" id="btn80">80</button>
+            <button class="small" id="btn443">443</button>
+          </div>
+        </div>
+        <div class="row" id="probeHeadline"></div>
+        <div class="row muted" id="probeDetail"></div>
+      </div>
+
+      <div>
+        <div class="row"><strong>Cloudflare context</strong></div>
+        <div class="row muted" id="cfmeta"></div>
+
+        <hr/>
+
+        <div class="row"><strong>Copy report</strong></div>
+        <button id="copyBtn" style="display:none;">Copy report</button>
+        <div class="row muted" id="note"></div>
+      </div>
+    </div>
+  </div>
+
+<script>
+  function isIPv6(ip) { return typeof ip === "string" && ip.includes(":"); }
+  function isIPv4(ip) { return typeof ip === "string" && /^\d{1,3}(\.\d{1,3}){3}$/.test(ip); }
+
+  function ipv4ToInt(ip) {
+    const p = ip.split(".").map(Number);
+    if (p.length !== 4 || p.some(n => Number.isNaN(n) || n < 0 || n > 255)) return null;
+    return ((p[0] << 24) >>> 0) + (p[1] << 16) + (p[2] << 8) + p[3];
+  }
+  function inCidr4(ip, base, maskBits) {
+    const ipInt = ipv4ToInt(ip);
+    const baseInt = ipv4ToInt(base);
+    if (ipInt === null || baseInt === null) return false;
+    const mask = maskBits === 0 ? 0 : (0xFFFFFFFF << (32 - maskBits)) >>> 0;
+    return (ipInt & mask) === (baseInt & mask);
+  }
+  function classifyIPv4(ip) {
+    if (inCidr4(ip, "100.64.0.0", 10)) return { type: "cgnat", label: "CGNAT IPv4 (RFC6598 100.64.0.0/10)" };
+    if (inCidr4(ip, "10.0.0.0", 8)) return { type: "private", label: "Private IPv4 (10/8)" };
+    if (inCidr4(ip, "172.16.0.0", 12)) return { type: "private", label: "Private IPv4 (172.16/12)" };
+    if (inCidr4(ip, "192.168.0.0", 16)) return { type: "private", label: "Private IPv4 (192.168/16)" };
+    if (inCidr4(ip, "127.0.0.0", 8)) return { type: "reserved", label: "Loopback IPv4 (127/8)" };
+    if (inCidr4(ip, "169.254.0.0", 16)) return { type: "reserved", label: "Link-local IPv4 (169.254/16)" };
+    return { type: "public", label: "Public IPv4 (not RFC6598 range)" };
+  }
+  function classifyIPv6(ipRaw) {
+    const ip = (ipRaw || "").toLowerCase();
+    if (ip === "::1") return { type: "reserved", label: "Loopback IPv6 (::1)" };
+    if (ip.startsWith("fe80:")) return { type: "reserved", label: "Link-local IPv6 (fe80::/10)" };
+    if (ip.startsWith("fc") || ip.startsWith("fd")) return { type: "private", label: "ULA IPv6 (fc00::/7)" };
+    if (ip.startsWith("2001:db8:")) return { type: "reserved", label: "Documentation IPv6 (2001:db8::/32)" };
+    if (ip.startsWith("2") || ip.startsWith("3")) return { type: "public", label: "Public IPv6" };
+    return { type: "unknown", label: "IPv6 (unclassified/reserved)" };
+  }
+  function classifyIP(ip) {
+    if (!ip) return { type: "unknown", label: "Unavailable" };
+    if (isIPv6(ip)) return classifyIPv6(ip);
+    if (isIPv4(ip)) return classifyIPv4(ip);
+    return ip.includes(":") ? classifyIPv6(ip) : classifyIPv4(ip);
+  }
+
+  async function getWebRTCServerReflexiveIPs(timeoutMs = 3500) {
+    const RTCPeerConnectionCtor = window.RTCPeerConnection || window.webkitRTCPeerConnection;
+    if (!RTCPeerConnectionCtor) return { ipv4: null, ipv6: null };
+
+    const pc = new RTCPeerConnectionCtor({
+      iceServers: [
+        { urls: "stun:stun.l.google.com:19302" },
+        { urls: "stun:stun1.l.google.com:19302" }
+      ]
+    });
+
+    let done = false;
+    const foundV4 = new Set();
+    const foundV6 = new Set();
+
+    function extractIP(candidateStr) {
+      const parts = candidateStr.split(" ");
+      for (const token of parts) {
+        if (/^\d{1,3}(\.\d{1,3}){3}$/.test(token)) return token;
+        if (/^[0-9a-fA-F:]+$/.test(token) && token.includes(":")) return token;
+      }
+      return null;
+    }
+
+    return await new Promise(async (resolve) => {
+      const timer = setTimeout(() => {
+        if (done) return;
+        done = true;
+        try { pc.close(); } catch {}
+        resolve({ ipv4: [...foundV4][0] || null, ipv6: [...foundV6][0] || null });
+      }, timeoutMs);
+
+      pc.onicecandidate = (event) => {
+        if (!event.candidate || done) return;
+        const cand = event.candidate.candidate || "";
+        if (!cand.includes(" typ srflx ")) return;
+
+        const ip = extractIP(cand);
+        if (!ip) return;
+        if (isIPv6(ip)) foundV6.add(ip);
+        else if (isIPv4(ip)) foundV4.add(ip);
+      };
+
+      try {
+        pc.createDataChannel("cgnatcheck");
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+      } catch {
+        clearTimeout(timer);
+        if (!done) {
+          done = true;
+          try { pc.close(); } catch {}
+          resolve({ ipv4: null, ipv6: null });
+        }
+        return;
+      }
+
+      const poll = setInterval(() => {
+        if (done) return clearInterval(poll);
+        const v4 = [...foundV4][0] || null;
+        const v6 = [...foundV6][0] || null;
+        if (v4 || v6) {
+          clearInterval(poll);
+          setTimeout(() => {
+            if (done) return;
+            clearTimeout(timer);
+            done = true;
+            try { pc.close(); } catch {}
+            resolve({ ipv4: [...foundV4][0] || null, ipv6: [...foundV6][0] || null });
+          }, 350);
+        }
+      }, 150);
+    });
+  }
+
+  function setPill(el, text, kind) {
+    el.innerHTML = '<span class="pill ' + kind + '">' + text + '</span>';
+  }
+  function fmtSignal(name, ip) {
+    if (!ip) return name + ': <span class="muted">unavailable</span>';
+    const info = classifyIP(ip);
+    return name + ': <code>' + ip + '</code> — <span class="muted">' + info.label + '</span>';
+  }
+  function escapeHtml(s) {
+    return String(s)
+      .replaceAll("&", "&amp;").replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;").replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+  }
+
+  async function runFlyProbe(host, port) {
+    const u = new URL("/api/probe", location.origin);
+    u.searchParams.set("host", host);
+    u.searchParams.set("port", String(port || "51820"));
+    const res = await fetch(u.toString(), { cache: "no-store" });
+    if (!res.ok) {
+      const t = await res.text().catch(() => "");
+      throw new Error("Probe failed (" + res.status + "): " + t);
+    }
+    return await res.json();
+  }
+
+  async function run() {
+    const headline = document.getElementById("headline");
+    const summary = document.getElementById("summary");
+    const sigCF = document.getElementById("sig_cf");
+    const sigSTUN = document.getElementById("sig_stun");
+    const families = document.getElementById("families");
+    const cfmeta = document.getElementById("cfmeta");
+    const copyBtn = document.getElementById("copyBtn");
+    const note = document.getElementById("note");
+
+    const probeHost = document.getElementById("probeHost");
+    const probePort = document.getElementById("probePort");
+    const probeBtn = document.getElementById("probeBtn");
+    const probeHeadline = document.getElementById("probeHeadline");
+    const probeDetail = document.getElementById("probeDetail");
+    const btn51820 = document.getElementById("btn51820");
+    const btn80 = document.getElementById("btn80");
+    const btn443 = document.getElementById("btn443");
+
+    let cfIP = null, cfData = null;
+
+    try {
+      const res = await fetch("/ip", { cache: "no-store" });
+      if (!res.ok) throw new Error("Failed to fetch /ip (HTTP " + res.status + ")");
+      const data = await res.json();
+      cfIP = data.ip || null;
+      cfData = data.cf || null;
+    } catch (e) {
+      setPill(headline, "❌ Check failed", "bad");
+      summary.textContent = String(e);
+      return;
+    }
+
+    // Autofill probe host with the Cloudflare-observed IP (same behavior as older builds)
+    if (cfIP && !probeHost.value) probeHost.value = cfIP;
+    if (!probePort.value) probePort.value = "51820";
+
+    const stun = await getWebRTCServerReflexiveIPs();
+    const stunV4 = stun.ipv4;
+    const stunV6 = stun.ipv6;
+
+    sigCF.innerHTML = fmtSignal("Cloudflare sees", cfIP);
+
+    const stunParts = [];
+    if (stunV4) stunParts.push(fmtSignal("WebRTC/STUN (IPv4)", stunV4));
+    if (stunV6) stunParts.push(fmtSignal("WebRTC/STUN (IPv6)", stunV6));
+    sigSTUN.innerHTML = stunParts.length ? stunParts.join("<br/>") : 'WebRTC/STUN: <span class="muted">unavailable</span>';
+
+    const observed = new Set();
+    if (cfIP) observed.add(isIPv6(cfIP) ? "IPv6" : "IPv4");
+    if (stunV4) observed.add("IPv4");
+    if (stunV6) observed.add("IPv6");
+    families.textContent = observed.size ? ("Detected families: " + [...observed].join(" + ")) : "Detected families: none";
+
+    const cfInfo = classifyIP(cfIP);
+    const stunInfoV4 = stunV4 ? classifyIP(stunV4) : { type: "unknown" };
+
+    const anyCGNAT = (cfInfo.type === "cgnat") || (stunInfoV4.type === "cgnat");
+    const anyPublic = (cfInfo.type === "public")
+      || (stunV4 && classifyIP(stunV4).type === "public")
+      || (stunV6 && classifyIP(stunV6).type === "public");
+
+    if (anyCGNAT) {
+      setPill(headline, "⚠️ CGNAT range detected (RFC6598)", "warn");
+      summary.textContent = "At least one IPv4 signal is in 100.64.0.0/10 (carrier-grade NAT space).";
+    } else if (anyPublic) {
+      setPill(headline, "✅ Public IP observed (not RFC6598)", "ok");
+      summary.textContent = "Observed address is not in the CGNAT range (100.64.0.0/10). Note: carriers can still NAT behind public IPs.";
+    } else {
+      setPill(headline, "❌ Not publicly routable signal detected", "bad");
+      summary.textContent = "Signals look private/reserved, not directly routable on the public internet.";
+    }
+
+    if (cfData) {
+      const bits = [];
+      if (cfData.asn) bits.push("ASN <code>" + cfData.asn + "</code>");
+      if (cfData.asOrganization) bits.push("Org <code>" + escapeHtml(cfData.asOrganization) + "</code>");
+      if (cfData.city || cfData.region || cfData.country) {
+        const loc = [cfData.city, cfData.region, cfData.country].filter(Boolean).join(", ");
+        bits.push("Location <code>" + escapeHtml(loc) + "</code>");
+      }
+      if (cfData.colo) bits.push("Colo <code>" + escapeHtml(cfData.colo) + "</code>");
+      if (cfData.timezone) bits.push("TZ <code>" + escapeHtml(cfData.timezone) + "</code>");
+      cfmeta.innerHTML = bits.length ? bits.join(" · ") : '<span class="muted">No Cloudflare metadata available.</span>';
+    } else {
+      cfmeta.innerHTML = '<span class="muted">No Cloudflare metadata available.</span>';
+    }
+
+    async function doProbe() {
+      const host = (probeHost.value || "").trim();
+      const port = (probePort.value || "51820").trim();
+
+      if (!host) {
+        setPill(probeHeadline, "⚠️ Missing host", "warn");
+        probeDetail.textContent = "Enter a host/IP to probe.";
+        return;
+      }
+
+      setPill(probeHeadline, "⏳ Probing…", "warn");
+      probeDetail.textContent = "Running UDP + TCP probe from Fly…";
+
+      try {
+        const data = await runFlyProbe(host, port);
+
+        const udp = data.udp || null;
+        const tcp = data.tcp || null;
+
+        const tcpConnectOk = !!(tcp && tcp.connect && tcp.connect.reachable);
+        const tcpConnectMs = (tcp && tcp.connect && typeof tcp.connect.latency_ms === "number") ? tcp.connect.latency_ms : null;
+
+        const httpInfo = (tcp && tcp.http && tcp.http.attempted) ? tcp.http : null;
+        const httpStatus = httpInfo && typeof httpInfo.status === "number" ? httpInfo.status : null;
+
+        const udpOk = !!(udp && udp.reachable);
+        const udpPortClosed = !!(udp && udp.port_closed);
+        const udpFiltered = !!(udp && udp.filtered);
+        const udpEcho = !!(udp && udp.echo_verified);
+        const udpMs = (udp && typeof udp.latency_ms === "number") ? udp.latency_ms : null;
+
+        // Verdict:
+        // - Green if TCP connect works OR UDP receives any response (best case)
+        // - Amber if UDP shows port-closed (host reachable but nothing listening)
+        // - Red otherwise (filtered/timeout/refused/fail)
+        if (tcpConnectOk || udpOk) {
+          setPill(probeHeadline, "✅ Inbound reachable (TCP and/or UDP)", "ok");
+        } else if (udpPortClosed) {
+          setPill(probeHeadline, "⚠️ Network reachable, but UDP port is closed", "warn");
+        } else {
+          setPill(probeHeadline, "❌ Inbound not reachable (TCP+UDP)", "bad");
+        }
+
+        const lines = [];
+
+        // UDP line
+        if (udp) {
+          if (udpOk) {
+            lines.push("UDP: reachable" + (udpEcho ? " (echo verified)" : "") + (udpMs !== null ? (" • " + udpMs + "ms") : ""));
+          } else if (udpPortClosed) {
+            lines.push("UDP: port closed (ICMP)" + (udpMs !== null ? (" • " + udpMs + "ms") : ""));
+          } else if (udpFiltered) {
+            lines.push("UDP: no response (filtered/timeout)");
+          } else {
+            lines.push("UDP: not reachable" + (udp.error ? (" (" + udp.error + ")") : ""));
+          }
+        } else {
+          lines.push("UDP: unavailable");
+        }
+
+        // TCP line
+        if (tcp) {
+          if (tcpConnectOk) {
+            let s = "TCP: reachable" + (tcpConnectMs !== null ? (" • " + tcpConnectMs + "ms") : "");
+            if (httpStatus !== null) {
+              s += " • HTTP " + httpStatus;
+              // Important: HTTP status does NOT change reachability.
+              // Some networks (or Cloudflare) can return 403/404/530/etc and still mean the port is open.
+            }
+            lines.push(s);
+          } else {
+            lines.push("TCP: not reachable" + (tcp.connect && tcp.connect.error ? (" (" + tcp.connect.error + ")") : (tcp.error ? (" (" + tcp.error + ")") : "")));
+          }
+        } else {
+          lines.push("TCP: unavailable");
+        }
+
+        probeDetail.textContent = lines.join(" · ");
+} catch (e) {
+        setPill(probeHeadline, "❌ Probe failed", "bad");
+        probeDetail.textContent = String(e);
+      }
+    }
+
+    probeBtn.onclick = doProbe;
+    btn51820.onclick = () => { probePort.value = "51820"; doProbe(); };
+    btn80.onclick = () => { probePort.value = "80"; doProbe(); };
+    btn443.onclick = () => { probePort.value = "443"; doProbe(); };
+
+    const reportLines = [];
+    if (cfIP) reportLines.push("Cloudflare: " + cfIP + " (" + classifyIP(cfIP).label + ")");
+    if (stunV4) reportLines.push("WebRTC/STUN IPv4: " + stunV4 + " (" + classifyIP(stunV4).label + ")");
+    if (stunV6) reportLines.push("WebRTC/STUN IPv6: " + stunV6 + " (" + classifyIP(stunV6).label + ")");
+    reportLines.push("CGNAT verdict: " + (anyCGNAT ? "RFC6598 CGNAT range detected" : "Not in RFC6598 range"));
+
+    copyBtn.style.display = "inline-block";
+    copyBtn.onclick = async () => {
+      const stamp = new Date().toISOString();
+      const text = "CGNAT.xyz Report (" + stamp + ")\n\n" + reportLines.map(s => "- " + s).join("\n") + "\n";
+      try {
+        await navigator.clipboard.writeText(text);
+        copyBtn.textContent = "Copied!";
+        setTimeout(() => (copyBtn.textContent = "Copy report"), 1200);
+      } catch {
+        alert(text);
+      }
+    };
+
+    if (!stunV4 && !stunV6) {
+      note.innerHTML = "Note: WebRTC/STUN is unavailable (blocked by browser/privacy settings). Results are based on Cloudflare-only.";
+    } else {
+      note.textContent = "";
+    }
+  }
+
+  run();
+</script>
 </body>
 </html>
